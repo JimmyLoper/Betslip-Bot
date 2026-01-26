@@ -112,21 +112,24 @@ async function handlePost(interaction) {
         // ------------------------------------------------------------
         // PLAYBOOK-FRIENDLY MESSAGE (NO ODDS SHOWN)
         // ------------------------------------------------------------
-        const PLAYBOOK_ID = '1408438245594763375'; // replace with real ID
-
+        const PLAYBOOK_ID = '1408438245594763375';
 
         let message = notifyText ? `${notifyText}\n` : '';
-        message += `<@${PLAYBOOK_ID}>\n`; // REAL mention
+        message += `<@${PLAYBOOK_ID}>\n`;
         message += `**${description}**\n`;
         message += `Risk: **${risk}u**\n`;
         message += `Sport: **${sport}**\n`;
-        
 
-        // Send message and capture it
-        const sent = await interaction.reply({
+        // Acknowledge the slash command
+        await interaction.reply({
+            content: 'Bet posted.',
+            ephemeral: true
+        });
+
+        // Send Playbook-triggering message as a normal bot message
+        const sent = await interaction.channel.send({
             content: message,
-            files: screenshotUrl ? [screenshotUrl] : [],
-            fetchReply: true
+            files: screenshotUrl ? [screenshotUrl] : []
         });
 
         // Store message_id
