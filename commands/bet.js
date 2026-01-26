@@ -116,13 +116,11 @@ async function handlePost(interaction) {
 
 
         let message = notifyText ? `${notifyText}\n` : '';
-        
+        message += `<@${PLAYBOOK_ID}>\n`; // REAL mention
         message += `**${description}**\n`;
         message += `Risk: **${risk}u**\n`;
         message += `Sport: **${sport}**\n`;
-        message += `<@${PLAYBOOK_ID}>\n`; // REAL mention
-
-
+        
 
         // Send message and capture it
         const sent = await interaction.reply({
