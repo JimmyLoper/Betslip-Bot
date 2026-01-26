@@ -112,12 +112,15 @@ async function handlePost(interaction) {
         // ------------------------------------------------------------
         // PLAYBOOK-FRIENDLY MESSAGE (NO ODDS SHOWN)
         // ------------------------------------------------------------
+        const PLAYBOOK_ID = '1408438245594763375'; // replace with real ID
+
+
         let message = notifyText ? `${notifyText}\n` : '';
         
         message += `**${description}**\n`;
         message += `Risk: **${risk}u**\n`;
         message += `Sport: **${sport}**\n`;
-        message += `<@${1408438245594763375}>\n`; // REAL mention
+        message += `<@${PLAYBOOK_ID}>\n`; // REAL mention
 
 
 
