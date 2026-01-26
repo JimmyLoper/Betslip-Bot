@@ -117,8 +117,10 @@ async function handlePost(interaction) {
         message += `**${description}**\n`;
         message += `Risk: **${risk}u**\n`;
         message += `Sport: **${sport}**\n`;
-        message += `@Playbook\n`;
-        
+        message += `<@${1408438245594763375}>\n`; // REAL mention
+
+
+
         // Send message and capture it
         const sent = await interaction.reply({
             content: message,
