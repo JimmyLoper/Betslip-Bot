@@ -1,37 +1,115 @@
-import { Client, GatewayIntentBits, Collection } from 'discord.js';
-import 'dotenv/config';
-import fs from 'node:fs';
-import path from 'node:path';
+require('dotenv').config();
+const {
+    Client,
+    GatewayIntentBits,
+    Collection
+} = require('discord.js');
+const fs = require('fs');
+const path = require('path');
 
 const client = new Client({
     intents: [GatewayIntentBits.Guilds]
 });
 
+// ------------------------------------------------------------
+// LOAD COMMANDS
+// ------------------------------------------------------------
 client.commands = new Collection();
 
-const commandsPath = path.join(process.cwd(), 'src/commands');
+const commandsPath = path.join(process.cwd(), 'commands');
 const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
 
 for (const file of commandFiles) {
     const filePath = path.join(commandsPath, file);
-    const command = await import(`file://${filePath}`);
-    client.commands.set(command.default.data.name, command.default);
+    const command = require(filePath);
+    client.commands.set(command.data.name, command);
 }
 
+// ------------------------------------------------------------
+// LOAD INTERACTION HANDLERS (dropdowns, buttons, etc.)
+// ------------------------------------------------------------
+client.interactions = new Collection();
+
+const interactionsPath = path.join(process.cwd(), 'interactions');
+if (fs.existsSync(interactionsPath)) {
+    const interactionFiles = fs.readdirSync(interactionsPath).filter(file => file.endsWith('.js'));
+
+    for (const file of interactionFiles) {
+        const filePath = path.join(interactionsPath, file);
+        const handler = require(filePath);
+
+        if (handler.customId) {
+            client.interactions.set(handler.customId, handler);
+        }
+    }
+}
+
+// ------------------------------------------------------------
+// INTERACTION ROUTER
+// ------------------------------------------------------------
 client.on('interactionCreate', async interaction => {
-    if (!interaction.isChatInputCommand()) return;
 
-    const command = client.commands.get(interaction.commandName);
-    if (!command) return;
+    // Slash commands
+    if (interaction.isChatInputCommand()) {
+        const command = client.commands.get(interaction.commandName);
+        if (!command) return;
 
-    try {
-        await command.execute(interaction);
-    } catch (error) {
-        console.error(error);
-        await interaction.reply({ content: 'There was an error executing this command.', ephemeral: true });
+        try {
+            await command.execute(interaction);
+        } catch (err) {
+            console.error(err);
+            if (!interaction.replied) {
+                await interaction.reply({
+                    content: 'There was an error executing this command.',
+                    ephemeral: true
+                });
+            }
+        }
+        return;
+    }
+
+    // Dropdowns
+    if (interaction.isStringSelectMenu()) {
+        const handler = client.interactions.get(interaction.customId);
+        if (!handler) return;
+
+        try {
+            await handler.execute(interaction);
+        } catch (err) {
+            console.error(err);
+            await interaction.reply({
+                content: 'Error handling selection.',
+                ephemeral: true
+            });
+        }
+        return;
+    }
+
+    // Buttons
+    if (interaction.isButton()) {
+        // settle_win_<betId>
+        // settle_msg_yes_<betId>_<result>
+        const parts = interaction.customId.split('_');
+        const baseId = `${parts[0]}_${parts[1]}`; // e.g., settle_win or settle_msg
+
+        const handler = client.interactions.get(baseId);
+        if (!handler) return;
+
+        try {
+            await handler.execute(interaction);
+        } catch (err) {
+            console.error(err);
+            await interaction.reply({
+                content: 'Error handling button.',
+                ephemeral: true
+            });
+        }
     }
 });
 
+// ------------------------------------------------------------
+// READY + LOGIN
+// ------------------------------------------------------------
 client.once('ready', () => {
     console.log(`Logged in as ${client.user.tag}`);
 });
