@@ -116,9 +116,7 @@ async function handlePost(interaction) {
 
         let message = notifyText ? `${notifyText}\n` : '';
         message += `<@${PLAYBOOK_ID}>\n`;
-        message += `**${description}**\n`;
-        message += `Risk: **${risk}u**\n`;
-        message += `Sport: **${sport}**\n`;
+        message += `${description} ${risk}u`;
 
         // Acknowledge the slash command
         await interaction.reply({
