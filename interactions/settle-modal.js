@@ -39,7 +39,12 @@ module.exports = {
             try {
                 const channel = await interaction.client.channels.fetch(channelId);
                 const original = await channel.messages.fetch(messageId);
-                await original.reply(userMessage);
+                await original.reply({
+                    content: userMessage,
+                    allowedMentions: {
+                        parse: ['roles', 'everyone']
+                    }
+            });
             } catch (err) {
                 console.error('Failed to reply to original bet post:', err);
             }
