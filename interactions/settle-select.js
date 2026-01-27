@@ -25,15 +25,15 @@ module.exports = {
 
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
-                .setCustomId(`settle_result_win_${betId}`)
+                .setCustomId(`settle_win_${betId}`)
                 .setLabel('Win')
                 .setStyle(ButtonStyle.Success),
             new ButtonBuilder()
-                .setCustomId(`settle_result_loss_${betId}`)
+                .setCustomId(`settle_loss_${betId}`)
                 .setLabel('Loss')
                 .setStyle(ButtonStyle.Danger),
             new ButtonBuilder()
-                .setCustomId(`settle_result_push_${betId}`)
+                .setCustomId(`settle_push_${betId}`)
                 .setLabel('Push')
                 .setStyle(ButtonStyle.Secondary)
         );

@@ -46,11 +46,7 @@ module.exports = {
                         .setDescription('Optional screenshot of the bet')
                         .setRequired(false)
                 )
-                .addStringOption(option =>
-                    option.setName('notify')
-                        .setDescription('Notify @everyone, @here, or a role. Do not @playbook here')
-                        .setRequired(false)
-                )
+                
         )
         .addSubcommand(sub =>
             sub
