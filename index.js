@@ -76,9 +76,9 @@ client.on('interactionCreate', async interaction => {
     // STRING SELECT MENUS
     // ------------------------------------------------------------
     if (interaction.isStringSelectMenu()) {
-        // settle_select:<userId>
-        const baseId = interaction.customId.split('_')[0];
-
+        const parts = interaction.customId.split('_');
+        const baseId = `${parts[0]}_${parts[1]}`; // settle_select
+        
         const handler = client.interactions.get(baseId);
         if (!handler) return;
 
