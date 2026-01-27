@@ -16,7 +16,7 @@ module.exports = {
         // settle_msg_no_<betId>_<result>
         const action = parts[2]; // yes / no
         const betId = parts[3];
-        const result = parts[4]; // win / loss / push
+        const result = parts[4];
         const graderId = interaction.user.id;
 
         // ------------------------------------------------------------
@@ -34,16 +34,23 @@ module.exports = {
 
             return interaction.update({
                 content: `Bet settled as **${result.toUpperCase()}**.`,
+                components: [],
                 ephemeral: true
             });
         }
 
         // ------------------------------------------------------------
-        // YES → show modal (message required)
+        // YES → open modal
         // ------------------------------------------------------------
+        await interaction.update({
+            content: `Enter a message for this **${result.toUpperCase()}** (modal opening)...`,
+            components: [],
+            ephemeral: true
+        });
+
         const modal = new ModalBuilder()
             .setCustomId(`settle_modal_${betId}_${result}`)
-            .setTitle('Send a message');
+            .setTitle('Settle Bet Message');
 
         const input = new TextInputBuilder()
             .setCustomId('settle_message_input')
@@ -51,8 +58,7 @@ module.exports = {
             .setStyle(TextInputStyle.Paragraph)
             .setRequired(true);
 
-        const row = new ActionRowBuilder().addComponents(input);
-        modal.addComponents(row);
+        modal.addComponents(new ActionRowBuilder().addComponents(input));
 
         return interaction.showModal(modal);
     }
