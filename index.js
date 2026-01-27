@@ -78,7 +78,7 @@ client.on('interactionCreate', async interaction => {
     if (interaction.isStringSelectMenu()) {
         const parts = interaction.customId.split('_');
         const baseId = `${parts[0]}_${parts[1]}`; // settle_select
-        
+
         const handler = client.interactions.get(baseId);
         if (!handler) return;
 
@@ -125,11 +125,12 @@ client.on('interactionCreate', async interaction => {
     // ------------------------------------------------------------
     // MODALS
     // ------------------------------------------------------------
-    if (interaction.isModalSubmit()) {
+        if (interaction.isModalSubmit()) {
         // settle_modal_<betId>_<result>
-        const baseId = interaction.customId.split('_')[0]; // settle
+        const baseId = interaction.customId.split('_').slice(0, 2).join('_'); 
+        // now correctly "settle_modal"
 
-        const handler = client.interactions.get(baseId + '_modal');
+        const handler = client.interactions.get(baseId);
         if (!handler) return;
 
         try {
