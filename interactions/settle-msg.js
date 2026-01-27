@@ -40,14 +40,8 @@ module.exports = {
         }
 
         // ------------------------------------------------------------
-        // YES → open modal
+        // YES → open modal (NO UPDATE BEFORE MODAL)
         // ------------------------------------------------------------
-        await interaction.update({
-            content: `Enter a message for this **${result.toUpperCase()}** (modal opening)...`,
-            components: [],
-            ephemeral: true
-        });
-
         const modal = new ModalBuilder()
             .setCustomId(`settle_modal_${betId}_${result}`)
             .setTitle('Settle Bet Message');
