@@ -128,13 +128,16 @@ async function handlePost(interaction) {
             components.push(row);
         }
 
-        // Send message and capture it
-        const sent = await interaction.reply({
+       // Send the main bet slip (the one Playbook should parse)
+        const parent = await interaction.channel.send({
             content: message,
-            files: screenshotUrl ? [screenshotUrl] : [],
-            components,
-            fetchReply: true
+            files: screenshotUrl ? [screenshotUrl] : []
         });
+
+        const PLAYBOOK_ID = '1408438245594763375';
+        // Trigger Playbook by replying to the bot's own message
+        await parent.reply(`<@${PLAYBOOK_ID}>`);
+
 
         // Store message_id
         await pool.query(
