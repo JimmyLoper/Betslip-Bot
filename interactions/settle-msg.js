@@ -32,7 +32,7 @@ module.exports = {
                 [result, graderId, Date.now(), betId]
             );
 
-            return interaction.reply({
+            return interaction.update({
                 content: `Bet settled as **${result.toUpperCase()}**.`,
                 ephemeral: true
             });

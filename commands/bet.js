@@ -67,7 +67,7 @@ module.exports = {
 };
 
 // ------------------------------------------------------------
-// POST HANDLER
+// POST HANDLER (AUTO-PING VERSION)
 // ------------------------------------------------------------
 async function handlePost(interaction) {
     const userId = interaction.user.id;
@@ -82,16 +82,6 @@ async function handlePost(interaction) {
     const screenshot = interaction.options.getAttachment('screenshot');
     const screenshotUrl = screenshot ? screenshot.url : null;
 
-    let notify = interaction.options.getString('notify') || '';
-    let notifyText = '';
-
-    if (notify) {
-        notify = notify.toLowerCase();
-        if (notify === 'everyone') notifyText = '@everyone';
-        else if (notify === 'here') notifyText = '@here';
-        else notifyText = notify;
-    }
-
     // payout calc
     let payout;
     if (odds < 0) payout = (risk * 100) / Math.abs(odds);
@@ -102,6 +92,7 @@ async function handlePost(interaction) {
     const timestamp = Date.now();
 
     try {
+        // Insert bet
         await pool.query(
             `INSERT INTO bets 
             (id, user_id, username, bet_description, sport, risk, odds, payout, result, timestamp)
@@ -109,8 +100,30 @@ async function handlePost(interaction) {
             [id, userId, username, description, sport, risk, odds, payout, timestamp]
         );
 
-        // Build message
-        let message = notifyText ? `${notifyText}\n` : '';
+        // ------------------------------------------------------------
+        // FETCH AUTO-NOTIFY ROLE FOR THIS CHANNEL
+        // ------------------------------------------------------------
+        const channelId = interaction.channel.id;
+
+        const { rows } = await pool.query(
+            `SELECT notify_role_id 
+             FROM channel_notify_roles 
+             WHERE channel_id = $1`,
+            [channelId]
+        );
+
+        const notifyRoleId = rows[0]?.notify_role_id;
+
+        // ------------------------------------------------------------
+        // BUILD MESSAGE
+        // ------------------------------------------------------------
+        let message = "";
+
+        // Auto-ping if role exists
+        if (notifyRoleId) {
+            message += `<@&${notifyRoleId}>\n`;
+        }
+
         message += `**${description}**\n`;
         message += `Risk: **${risk}u**\n`;
 
@@ -127,15 +140,18 @@ async function handlePost(interaction) {
             components.push(row);
         }
 
-        // Send message and capture it
+        // ------------------------------------------------------------
+        // SEND MESSAGE WITH ALLOWED MENTIONS
+        // ------------------------------------------------------------
         const sent = await interaction.reply({
             content: message,
             files: screenshotUrl ? [screenshotUrl] : [],
             components,
+            allowedMentions: notifyRoleId ? { roles: [notifyRoleId] } : undefined,
             fetchReply: true
         });
 
-        // Store message_id
+        // Store message_id + channel_id
         await pool.query(
             `UPDATE bets SET message_id = $1, channel_id = $2 WHERE id = $3`,
             [sent.id, sent.channel.id, id]

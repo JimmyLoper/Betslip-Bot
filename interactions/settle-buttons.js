@@ -29,7 +29,7 @@ module.exports = {
                 .setStyle(ButtonStyle.Secondary)
         );
 
-        return interaction.reply({
+        return interaction.update({
             content: 'Send a message to the original bet post?',
             components: [row],
             ephemeral: true
