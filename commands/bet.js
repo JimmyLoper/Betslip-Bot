@@ -153,7 +153,7 @@ async function handlePost(interaction) {
 // ------------------------------------------------------------
 // SETTLE HANDLER
 // ------------------------------------------------------------
-async function handleSettle(interaction, pool) {
+async function handleSettle(interaction) {
     const userId = interaction.user.id;
 
     const { rows } = await pool.query(
