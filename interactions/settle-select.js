@@ -1,4 +1,8 @@
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
+const {
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle
+} = require('discord.js');
 
 module.exports = {
     customId: 'settle_select',
@@ -6,7 +10,6 @@ module.exports = {
     async execute(interaction) {
         const betId = interaction.values[0]; // selected bet ID
 
-        // Build Win / Loss / Push buttons
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
                 .setCustomId(`settle_win_${betId}`)
@@ -24,8 +27,8 @@ module.exports = {
                 .setStyle(ButtonStyle.Secondary)
         );
 
-        await interaction.reply({
-            content: `How did this bet grade?`,
+        return interaction.reply({
+            content: 'How did this bet grade?',
             components: [row],
             ephemeral: true
         });

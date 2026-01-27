@@ -49,7 +49,9 @@ if (fs.existsSync(interactionsPath)) {
 // ------------------------------------------------------------
 client.on('interactionCreate', async interaction => {
 
-    // Slash commands
+    // ------------------------------------------------------------
+    // SLASH COMMANDS
+    // ------------------------------------------------------------
     if (interaction.isChatInputCommand()) {
         const command = client.commands.get(interaction.commandName);
         if (!command) return;
@@ -68,9 +70,14 @@ client.on('interactionCreate', async interaction => {
         return;
     }
 
-    // Dropdowns
+    // ------------------------------------------------------------
+    // STRING SELECT MENUS
+    // ------------------------------------------------------------
     if (interaction.isStringSelectMenu()) {
-        const handler = client.interactions.get(interaction.customId);
+        // settle_select:<userId>
+        const baseId = interaction.customId.split(':')[0];
+
+        const handler = client.interactions.get(baseId);
         if (!handler) return;
 
         try {
@@ -85,12 +92,18 @@ client.on('interactionCreate', async interaction => {
         return;
     }
 
-    // Buttons
+    // ------------------------------------------------------------
+    // BUTTONS
+    // ------------------------------------------------------------
     if (interaction.isButton()) {
         // settle_win_<betId>
+        // settle_loss_<betId>
+        // settle_push_<betId>
         // settle_msg_yes_<betId>_<result>
+        // settle_msg_no_<betId>_<result>
+
         const parts = interaction.customId.split('_');
-        const baseId = `${parts[0]}_${parts[1]}`; // e.g., settle_win or settle_msg
+        const baseId = `${parts[0]}_${parts[1]}`; // settle_win, settle_loss, settle_push, settle_msg
 
         const handler = client.interactions.get(baseId);
         if (!handler) return;
@@ -101,6 +114,28 @@ client.on('interactionCreate', async interaction => {
             console.error(err);
             await interaction.reply({
                 content: 'Error handling button.',
+                ephemeral: true
+            });
+        }
+        return;
+    }
+
+    // ------------------------------------------------------------
+    // MODALS
+    // ------------------------------------------------------------
+    if (interaction.isModalSubmit()) {
+        // settle_modal_<betId>_<result>
+        const baseId = interaction.customId.split('_')[0]; // settle
+
+        const handler = client.interactions.get(baseId + '_modal');
+        if (!handler) return;
+
+        try {
+            await handler.execute(interaction);
+        } catch (err) {
+            console.error(err);
+            await interaction.reply({
+                content: 'Error handling modal.',
                 ephemeral: true
             });
         }

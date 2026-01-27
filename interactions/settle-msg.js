@@ -1,4 +1,10 @@
 const pool = require('../utils/db');
+const {
+    ModalBuilder,
+    TextInputBuilder,
+    TextInputStyle,
+    ActionRowBuilder
+} = require('discord.js');
 
 module.exports = {
     customId: 'settle_msg',
@@ -11,12 +17,19 @@ module.exports = {
         const action = parts[2]; // yes / no
         const betId = parts[3];
         const result = parts[4]; // win / loss / push
+        const graderId = interaction.user.id;
 
-        // If NO → update DB and finish
+        // ------------------------------------------------------------
+        // NO → silent settlement
+        // ------------------------------------------------------------
         if (action === 'no') {
             await pool.query(
-                `UPDATE bets SET result = $1 WHERE id = $2`,
-                [result, betId]
+                `UPDATE bets
+                 SET result = $1,
+                     graded_by = $2,
+                     graded_at = $3
+                 WHERE id = $4`,
+                [result, graderId, Date.now(), betId]
             );
 
             return interaction.reply({
@@ -25,56 +38,22 @@ module.exports = {
             });
         }
 
-        // If YES → ask for message
-        await interaction.reply({
-            content: `Type the message you want to send. You have 2 minutes.`,
-            ephemeral: true
-        });
+        // ------------------------------------------------------------
+        // YES → show modal (message required)
+        // ------------------------------------------------------------
+        const modal = new ModalBuilder()
+            .setCustomId(`settle_modal_${betId}_${result}`)
+            .setTitle('Send a message');
 
-        // Wait for next message from the same user
-        const msg = await interaction.channel.awaitMessages({
-            filter: m => m.author.id === interaction.user.id,
-            max: 1,
-            time: 120000
-        });
+        const input = new TextInputBuilder()
+            .setCustomId('settle_message_input')
+            .setLabel('Message to send to the bet post')
+            .setStyle(TextInputStyle.Paragraph)
+            .setRequired(true);
 
-        if (!msg.size) {
-            return interaction.followUp({
-                content: 'Timed out. Bet was NOT settled.',
-                ephemeral: true
-            });
-        }
+        const row = new ActionRowBuilder().addComponents(input);
+        modal.addComponents(row);
 
-        const userMessage = msg.first().content;
-
-        // Fetch original betslip message_id
-        const { rows } = await pool.query(
-            `SELECT message_id FROM bets WHERE id = $1`,
-            [betId]
-        );
-
-        const messageId = rows[0]?.message_id;
-
-        // Update DB
-        await pool.query(
-            `UPDATE bets SET result = $1 WHERE id = $2`,
-            [result, betId]
-        );
-
-        // Reply to original betslip
-        if (messageId) {
-            try {
-                const channel = interaction.channel;
-                const original = await channel.messages.fetch(messageId);
-                await original.reply(userMessage);
-            } catch (err) {
-                console.error('Failed to reply to original post:', err);
-            }
-        }
-
-        return interaction.followUp({
-            content: `Bet settled as **${result.toUpperCase()}** and message sent.`,
-            ephemeral: true
-        });
+        return interaction.showModal(modal);
     }
 };

@@ -28,12 +28,12 @@ module.exports = {
                 )
                 .addStringOption(option =>
                     option.setName('sport')
-                        .setDescription('Sport (NBA, NFL, NHL, etc.)')
+                        .setDescription('Sport (for tracking) use multi for cross sports bets')
                         .setRequired(true)
                 )
                 .addNumberOption(option =>
                     option.setName('odds')
-                        .setDescription('American odds (e.g., -110, +150)')
+                        .setDescription('Odds when you placed the bet for tracking purposes')
                         .setRequired(true)
                 )
                 .addStringOption(option =>
@@ -48,7 +48,7 @@ module.exports = {
                 )
                 .addStringOption(option =>
                     option.setName('notify')
-                        .setDescription('Notify @everyone, @here, or a role')
+                        .setDescription('Notify @everyone, @here, or a role. Do not @playbook here')
                         .setRequired(false)
                 )
         )
@@ -112,7 +112,6 @@ async function handlePost(interaction) {
         // Build message
         let message = notifyText ? `${notifyText}\n` : '';
         message += `**${description}**\n`;
-        message += `Sport: **${sport}**\n`;
         message += `Risk: **${risk}u**\n`;
 
         // Link button
@@ -154,13 +153,14 @@ async function handlePost(interaction) {
 // ------------------------------------------------------------
 // SETTLE HANDLER
 // ------------------------------------------------------------
-async function handleSettle(interaction) {
+async function handleSettle(interaction, pool) {
     const userId = interaction.user.id;
 
     const { rows } = await pool.query(
-        `SELECT id, bet_description 
-         FROM bets 
-         WHERE user_id = $1 AND result = 'pending'`,
+        `SELECT id, bet_description
+         FROM bets
+         WHERE user_id = $1 AND result = 'pending'
+         ORDER BY timestamp DESC`,
         [userId]
     );
 
@@ -178,14 +178,16 @@ async function handleSettle(interaction) {
 
     const menu = new ActionRowBuilder().addComponents(
         new StringSelectMenuBuilder()
-            .setCustomId('settle_select')
+            .setCustomId(`settle_select:${userId}`) // prevents cross-user collisions
             .setPlaceholder('Select a bet to settle')
             .addOptions(options)
     );
 
-    await interaction.reply({
+    return interaction.reply({
         content: 'Choose a bet to settle:',
         components: [menu],
         ephemeral: true
     });
 }
+
+module.exports = { handleSettle };

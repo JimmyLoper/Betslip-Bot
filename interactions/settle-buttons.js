@@ -16,7 +16,7 @@ module.exports = {
         const result = parts[1]; // win / loss / push
         const betId = parts[2];
 
-        // Step 1 — Ask if they want to send a message
+        // Ask if they want to send a message
         const row = new ActionRowBuilder().addComponents(
             new ButtonBuilder()
                 .setCustomId(`settle_msg_yes_${betId}_${result}`)
@@ -29,8 +29,8 @@ module.exports = {
                 .setStyle(ButtonStyle.Secondary)
         );
 
-        await interaction.reply({
-            content: `Send a message to the original bet post?`,
+        return interaction.reply({
+            content: 'Send a message to the original bet post?',
             components: [row],
             ephemeral: true
         });
