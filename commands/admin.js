@@ -138,11 +138,11 @@ async function handleAddBet(interaction) {
         payout = (risk * odds) / 100;
     }
     payout = Number(payout.toFixed(2));
-
+    const ts = Date.now();
     await pool.query(
         `INSERT INTO bets
          (id, user_id, username, bet_description, risk, odds, payout, result, timestamp, channel_id, message_id)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,'pending',NOW(),$8,$9)`,
+         VALUES ($1,$2,$3,$4,$5,$6,$7,'pending',$8,$9,$10)`,
         [
             uuidv4(),
             capperId,
