@@ -168,13 +168,31 @@ async function handlePost(interaction) {
 async function handleSettle(interaction) {
     const userId = interaction.user.id;
 
-    const { rows } = await pool.query(
-        `SELECT id, bet_description
-         FROM bets
-         WHERE user_id = $1 AND result = 'pending'
-         ORDER BY timestamp DESC`,
-        [userId]
-    );
+    // your Discord ID (override)
+    const OVERRIDE_ID = process.env.ADMIN_OVERRIDE_ID;
+
+    let rows;
+
+    if (userId === OVERRIDE_ID) {
+        // You see ALL pending bets
+        const result = await pool.query(
+            `SELECT id, bet_description
+             FROM bets
+             WHERE result = 'pending'
+             ORDER BY timestamp DESC`
+        );
+        rows = result.rows;
+    } else {
+        // Everyone else sees only THEIR pending bets
+        const result = await pool.query(
+            `SELECT id, bet_description
+             FROM bets
+             WHERE user_id = $1 AND result = 'pending'
+             ORDER BY timestamp DESC`,
+            [userId]
+        );
+        rows = result.rows;
+    }
 
     if (rows.length === 0) {
         return interaction.reply({
@@ -190,7 +208,7 @@ async function handleSettle(interaction) {
 
     const menu = new ActionRowBuilder().addComponents(
         new StringSelectMenuBuilder()
-            .setCustomId(`settle_select_${userId}`) // prevents cross-user collisions
+            .setCustomId(`settle_select_${userId}`)
             .setPlaceholder('Select a bet to settle')
             .addOptions(options)
     );
