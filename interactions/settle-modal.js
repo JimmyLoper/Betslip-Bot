@@ -1,7 +1,7 @@
 const pool = require('../utils/db');
 
 module.exports = {
-    customId: 'settle_modal',
+    customIds: ['settle_modal'],
 
     async execute(interaction) {
         // settle_modal_<betId>_<result>

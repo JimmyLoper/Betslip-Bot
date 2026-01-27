@@ -7,7 +7,7 @@ const {
 } = require('discord.js');
 
 module.exports = {
-    customId: 'settle_msg',
+    customIds: ['settle_msg'],
 
     async execute(interaction) {
         const parts = interaction.customId.split('_');

@@ -5,7 +5,7 @@ const {
 } = require('discord.js');
 
 module.exports = {
-    customId: 'settle_select',
+    customIds: ['settle_select'],
 
     async execute(interaction) {
         const betId = interaction.values[0]; // selected bet ID

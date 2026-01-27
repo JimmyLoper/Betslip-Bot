@@ -178,7 +178,7 @@ async function handleSettle(interaction) {
 
     const menu = new ActionRowBuilder().addComponents(
         new StringSelectMenuBuilder()
-            .setCustomId(`settle_select:${userId}`) // prevents cross-user collisions
+            .setCustomId(`settle_select_${userId}`) // prevents cross-user collisions
             .setPlaceholder('Select a bet to settle')
             .addOptions(options)
     );
