@@ -20,22 +20,26 @@ module.exports = {
         const betId = parts[2];
 
         // ------------------------------------------------------------
-        // WIN → always require a message → open modal immediately
+        // WIN → ask if they want to send a message
         // ------------------------------------------------------------
         if (result === 'win') {
-            const modal = new ModalBuilder()
-                .setCustomId(`settle_modal_${betId}_${result}`)
-                .setTitle('Settle Bet Message');
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId(`settle_msg_yes_${betId}_${result}`)
+                    .setLabel('Send Message')
+                    .setStyle(ButtonStyle.Primary),
 
-            const input = new TextInputBuilder()
-                .setCustomId('settle_message_input')
-                .setLabel('Message to send to the bet post')
-                .setStyle(TextInputStyle.Paragraph)
-                .setRequired(true);
+                new ButtonBuilder()
+                    .setCustomId(`settle_msg_no_${betId}_${result}`)
+                    .setLabel('Settle Silently')
+                    .setStyle(ButtonStyle.Secondary)
+            );
 
-            modal.addComponents(new ActionRowBuilder().addComponents(input));
-
-            return interaction.showModal(modal);
+            return interaction.update({
+                content: `Do you want to send a message for this **WIN**?`,
+                components: [row],
+                ephemeral: true
+            });
         }
 
         // ------------------------------------------------------------
