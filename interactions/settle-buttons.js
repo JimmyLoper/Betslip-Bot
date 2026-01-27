@@ -23,12 +23,6 @@ module.exports = {
         // WIN → always require a message → open modal immediately
         // ------------------------------------------------------------
         if (result === 'win') {
-            await interaction.update({
-                content: `Enter a message for this **WIN** (modal opening)...`,
-                components: [],
-                ephemeral: true
-            });
-
             const modal = new ModalBuilder()
                 .setCustomId(`settle_modal_${betId}_${result}`)
                 .setTitle('Settle Bet Message');
