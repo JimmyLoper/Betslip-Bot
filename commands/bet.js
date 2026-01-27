@@ -7,6 +7,7 @@ const {
     ButtonStyle,
     StringSelectMenuBuilder
 } = require('discord.js');
+const { channel } = require('diagnostics_channel');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -167,6 +168,7 @@ async function handlePost(interaction) {
 // ------------------------------------------------------------
 async function handleSettle(interaction) {
     const userId = interaction.user.id;
+    const channelId = interaction.channel.id;
 
     // your Discord ID (override)
     const OVERRIDE_ID = process.env.ADMIN_OVERRIDE_ID;
@@ -179,7 +181,9 @@ async function handleSettle(interaction) {
             `SELECT id, bet_description
              FROM bets
              WHERE result = 'pending'
-             ORDER BY timestamp DESC`
+             AND channel_id = $1
+             ORDER BY timestamp DESC`,
+             [channelId]
         );
         rows = result.rows;
     } else {
