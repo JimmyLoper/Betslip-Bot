@@ -189,5 +189,3 @@ async function handleSettle(interaction, pool) {
         ephemeral: true
     });
 }
-
-module.exports = { handleSettle };
