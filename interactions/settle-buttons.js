@@ -5,7 +5,7 @@ const {
 } = require('discord.js');
 
 module.exports = {
-    customId: 'settle_win', // base ID for routing (win/loss/push share handler)
+    customIds: ['settle_win', 'settle_loss', 'settle_push'], //IDs for routing (win/loss/push share handler)
 
     async execute(interaction) {
         const parts = interaction.customId.split('_');

@@ -137,8 +137,8 @@ async function handlePost(interaction) {
 
         // Store message_id
         await pool.query(
-            `UPDATE bets SET message_id = $1 WHERE id = $2`,
-            [sent.id, id]
+            `UPDATE bets SET message_id = $1, channel_id = $2 WHERE id = $3`,
+            [sent.id, sent.channel.id, id]
         );
 
     } catch (err) {

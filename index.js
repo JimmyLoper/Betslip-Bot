@@ -38,8 +38,10 @@ if (fs.existsSync(interactionsPath)) {
         const filePath = path.join(interactionsPath, file);
         const handler = require(filePath);
 
-        if (handler.customId) {
-            client.interactions.set(handler.customId, handler);
+        if (handler.customIds && Array.isArray(handler.customIds)) {
+            for (const id of handler.customIds) {
+                client.interactions.set(id, handler);
+            }
         }
     }
 }
