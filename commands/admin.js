@@ -1,6 +1,6 @@
 const { SlashCommandBuilder } = require('discord.js');
 const { v4: uuidv4 } = require('uuid');
-const pool = require('../db');
+const pool = require('../utils/db');
 
 module.exports = {
     data: new SlashCommandBuilder()
