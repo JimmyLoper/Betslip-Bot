@@ -76,7 +76,7 @@ async function handlePost(interaction) {
     const description = interaction.options.getString('description');
     const risk = interaction.options.getNumber('risk');
     const sport = interaction.options.getString('sport');
-    const odds = interaction.options.getNumber('odds'); // tracked only
+    const odds = interaction.options.getNumber('odds');
     const link = interaction.options.getString('link') || null;
 
     const screenshot = interaction.options.getAttachment('screenshot');
@@ -92,7 +92,7 @@ async function handlePost(interaction) {
         else notifyText = notify;
     }
 
-    // payout calc (profit only)
+    // payout calc
     let payout;
     if (odds < 0) payout = (risk * 100) / Math.abs(odds);
     else payout = (risk * odds) / 100;
@@ -109,25 +109,31 @@ async function handlePost(interaction) {
             [id, userId, username, description, sport, risk, odds, payout, timestamp]
         );
 
-        // ------------------------------------------------------------
-        // PLAYBOOK-FRIENDLY MESSAGE (NO ODDS SHOWN)
-        // ------------------------------------------------------------
-        const PLAYBOOK_ID = '1408438245594763375';
-
+        // Build message
         let message = notifyText ? `${notifyText}\n` : '';
-        message += `<@${PLAYBOOK_ID}>\n`;
-        message += `${description} ${risk}u`;
+        message += `**${description}**\n`;
+        message += `Sport: **${sport}**\n`;
+        message += `Risk: **${risk}u**\n`;
 
-        // Acknowledge the slash command
-        await interaction.reply({
-            content: 'Bet posted.',
-            ephemeral: true
-        });
+        // Link button
+        let components = [];
+        if (link) {
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setLabel('Link')
+                    .setStyle(ButtonStyle.Link)
+                    .setURL(link)
+                    .setEmoji('🔗')
+            );
+            components.push(row);
+        }
 
-        // Send Playbook-triggering message as a normal bot message
-        const sent = await interaction.channel.send({
+        // Send message and capture it
+        const sent = await interaction.reply({
             content: message,
-            files: screenshotUrl ? [screenshotUrl] : []
+            files: screenshotUrl ? [screenshotUrl] : [],
+            components,
+            fetchReply: true
         });
 
         // Store message_id
@@ -144,6 +150,7 @@ async function handlePost(interaction) {
         });
     }
 }
+
 // ------------------------------------------------------------
 // SETTLE HANDLER
 // ------------------------------------------------------------
