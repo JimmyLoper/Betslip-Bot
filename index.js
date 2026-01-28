@@ -76,10 +76,7 @@ client.on('interactionCreate', async interaction => {
     // STRING SELECT MENUS
     // ------------------------------------------------------------
     if (interaction.isStringSelectMenu()) {
-        const parts = interaction.customId.split('_');
-        const baseId = `${parts[0]}_${parts[1]}`; // settle_select
-
-        const handler = client.interactions.get(baseId);
+        const handler = findInteractionHandler(interaction.customId);
         if (!handler) return;
 
         try {
@@ -98,16 +95,7 @@ client.on('interactionCreate', async interaction => {
     // BUTTONS
     // ------------------------------------------------------------
     if (interaction.isButton()) {
-        // settle_win_<betId>
-        // settle_loss_<betId>
-        // settle_push_<betId>
-        // settle_msg_yes_<betId>_<result>
-        // settle_msg_no_<betId>_<result>
-
-        const parts = interaction.customId.split('_');
-        const baseId = `${parts[0]}_${parts[1]}`; // settle_win, settle_loss, settle_push, settle_msg
-
-        const handler = client.interactions.get(baseId);
+        const handler = findInteractionHandler(interaction.customId);
         if (!handler) return;
 
         try {
@@ -125,12 +113,8 @@ client.on('interactionCreate', async interaction => {
     // ------------------------------------------------------------
     // MODALS
     // ------------------------------------------------------------
-        if (interaction.isModalSubmit()) {
-        // settle_modal_<betId>_<result>
-        const baseId = interaction.customId.split('_').slice(0, 2).join('_'); 
-        // now correctly "settle_modal"
-
-        const handler = client.interactions.get(baseId);
+    if (interaction.isModalSubmit()) {
+        const handler = findInteractionHandler(interaction.customId);
         if (!handler) return;
 
         try {
@@ -144,6 +128,22 @@ client.on('interactionCreate', async interaction => {
         }
     }
 });
+
+function findInteractionHandler(customId) {
+    // Exact match first
+    if (client.interactions.has(customId)) {
+        return client.interactions.get(customId);
+    }
+
+    // Prefix match (for ladder_step_modal_1_5, etc.)
+    for (const [id, handler] of client.interactions.entries()) {
+        if (customId.startsWith(id)) {
+            return handler;
+        }
+    }
+
+    return null;
+}
 
 // ------------------------------------------------------------
 // READY + LOGIN
