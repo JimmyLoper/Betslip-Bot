@@ -19,6 +19,11 @@ module.exports = {
                         .setDescription('Bet description')
                         .setRequired(true)
                 )
+                .addStringOption(opt =>
+                    opt.setName('sport')
+                        .setDescription('Sport for the bet (NFL, NBA, etc.)')
+                        .setRequired(true)
+                )
                 .addNumberOption(opt =>
                     opt.setName('risk')
                         .setDescription('Units risked')
@@ -51,6 +56,11 @@ module.exports = {
                 .addStringOption(opt =>
                     opt.setName('description')
                         .setDescription('New description')
+                        .setRequired(false)
+                )
+                .addStringOption(opt =>
+                    opt.setName('sport')
+                        .setDescription('new sport')
                         .setRequired(false)
                 )
                 .addNumberOption(opt =>
@@ -128,6 +138,7 @@ async function handleAddBet(interaction) {
     const description = interaction.options.getString('description');
     const risk = interaction.options.getNumber('risk');
     const odds = interaction.options.getNumber('odds');
+    const sport = interaction.options.getString('sport');
     const messageId = interaction.options.getString('message_id');
 
     // Calculate payout
@@ -141,16 +152,18 @@ async function handleAddBet(interaction) {
     const ts = Date.now();
     await pool.query(
         `INSERT INTO bets
-         (id, user_id, username, bet_description, risk, odds, payout, result, timestamp, channel_id, message_id)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,'pending',$8,$9,$10)`,
+         (id, user_id, username, bet_description, sport, risk, odds, payout, result, timestamp, channel_id, message_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending',$9,$10,$11)`,
         [
             uuidv4(),
             capperId,
             capperUsername,
             description,
+            sport,
             risk,
             odds,
             payout,
+            ts,
             channelId,
             messageId
         ]
@@ -169,6 +182,7 @@ async function handleFixBet(interaction) {
     const betId = interaction.options.getString('bet_id');
 
     const newDescription = interaction.options.getString('description');
+    const newSport = interaction.options.getString('sport');
     const newRisk = interaction.options.getNumber('risk');
     const newOdds = interaction.options.getNumber('odds');
     const newMessageId = interaction.options.getString('message_id');
@@ -220,6 +234,10 @@ async function handleFixBet(interaction) {
     if (newMessageId) {
         updates.push(`message_id = $${idx++}`);
         values.push(newMessageId);
+    }
+    if (newSport) {
+        updates.push(`sport = $${idx++}`);
+        values.push(newSport);
     }
 
     // Always update payout if risk or odds changed
