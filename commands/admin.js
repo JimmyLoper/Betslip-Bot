@@ -170,7 +170,7 @@ async function handleAddBet(interaction) {
     );
 
     return interaction.reply({
-        content: `Bet added silently for **${capperUsername}**.`,
+        content: `Added bet: **${description}**\nCapper: **${capperUsername}**`,
         ephemeral: true
     });
 }
