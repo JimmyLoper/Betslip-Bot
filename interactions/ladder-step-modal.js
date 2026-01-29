@@ -43,11 +43,11 @@ module.exports = {
 
         // If more steps remain → open next modal
         if (stepNumber < totalSteps) {
-            return showNextStepModal(interaction, stepNumber + 1, totalSteps);
+            return await showNextStepModal(interaction, stepNumber + 1, totalSteps);
         }
 
         // If this was the last step → open final modal
-        return showFinalModal(interaction);
+        return await showFinalModal(interaction);
     }
 };
 
