@@ -16,9 +16,9 @@ module.exports = {
     }
 };
 
-// ------------------------------------------------------------
+// ---------------------------------------------------
 // SHOW MODAL FOR A SPECIFIC STEP
-// ------------------------------------------------------------
+// ---------------------------------------------------
 async function showLadderStepModal(interaction, stepNumber, totalSteps) {
     const modal = new ModalBuilder()
         .setCustomId(`ladder_step_modal_${stepNumber}_${totalSteps}`)

@@ -42,56 +42,12 @@ module.exports = {
         )
 
         // ------------------------------------------------------------
-        // /admin fixbet
+        // /admin addladder
         // ------------------------------------------------------------
         .addSubcommand(sub =>
             sub
-                .setName('fixbet')
-                .setDescription('Edit an existing bet by ID')
-                .addStringOption(opt =>
-                    opt.setName('bet_id')
-                        .setDescription('Bet ID to edit')
-                        .setRequired(true)
-                )
-                .addStringOption(opt =>
-                    opt.setName('description')
-                        .setDescription('New description')
-                        .setRequired(false)
-                )
-                .addStringOption(opt =>
-                    opt.setName('sport')
-                        .setDescription('new sport')
-                        .setRequired(false)
-                )
-                .addNumberOption(opt =>
-                    opt.setName('risk')
-                        .setDescription('New risk amount')
-                        .setRequired(false)
-                )
-                .addNumberOption(opt =>
-                    opt.setName('odds')
-                        .setDescription('New odds (American)')
-                        .setRequired(false)
-                )
-                .addStringOption(opt =>
-                    opt.setName('message_id')
-                        .setDescription('New message ID')
-                        .setRequired(false)
-                )
-        )
-
-        // ------------------------------------------------------------
-        // /admin deletebet
-        // ------------------------------------------------------------
-        .addSubcommand(sub =>
-            sub
-                .setName('deletebet')
-                .setDescription('Delete a bet by ID')
-                .addStringOption(opt =>
-                    opt.setName('bet_id')
-                        .setDescription('Bet ID to delete')
-                        .setRequired(true)
-                )
+                .setName('addladder')
+                .setDescription('Add a multi-step ladder to the bets table using modals')
         ),
 
     async execute(interaction) {
@@ -107,8 +63,7 @@ module.exports = {
         }
 
         if (sub === 'addbet') return handleAddBet(interaction);
-        if (sub === 'fixbet') return handleFixBet(interaction);
-        if (sub === 'deletebet') return handleDeleteBet(interaction);
+        if (sub === 'addladder') return handleAddLadder(interaction);
     }
 };
 
@@ -117,9 +72,10 @@ module.exports = {
 // ------------------------------------------------------------
 async function handleAddBet(interaction) {
     const channelId = interaction.channel.id;
+    const { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } = require('discord.js');
 
     const { rows } = await pool.query(
-        `SELECT user_id, username
+        `SELECT user_id, username, tracker_channel_id
          FROM channel_notify_roles
          WHERE channel_id = $1`,
         [channelId]
@@ -134,6 +90,7 @@ async function handleAddBet(interaction) {
 
     const capperId = rows[0].user_id;
     const capperUsername = rows[0].username;
+    const trackerChannelId = rows[0].tracker_channel_id;
 
     const description = interaction.options.getString('description');
     const risk = interaction.options.getNumber('risk');
@@ -150,12 +107,14 @@ async function handleAddBet(interaction) {
     }
     payout = Number(payout.toFixed(2));
     const ts = Date.now();
+    const betId = uuidv4();
+
     await pool.query(
         `INSERT INTO bets
          (id, user_id, username, bet_description, sport, risk, odds, payout, result, timestamp, channel_id, message_id)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending',$9,$10,$11)`,
         [
-            uuidv4(),
+            betId,
             capperId,
             capperUsername,
             description,
@@ -169,108 +128,86 @@ async function handleAddBet(interaction) {
         ]
     );
 
+    // Post to tracker channel
+    if (trackerChannelId) {
+        try {
+            const trackerChannel = await interaction.client.channels.fetch(trackerChannelId);
+            if (trackerChannel) {
+                const embed = new EmbedBuilder()
+                    .setTitle(description)
+                    .setColor(0x3498db)
+                    .addFields(
+                        { name: 'Sport', value: sport, inline: true },
+                        { name: 'Risk', value: `${risk}u`, inline: true },
+                        { name: 'Odds', value: odds.toString(), inline: true },
+                        { name: 'Payout', value: `${payout}u`, inline: true }
+                    )
+                    .setTimestamp();
+
+                const settleRow = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder()
+                        .setCustomId(`settle_win_${betId}`)
+                        .setLabel('Win')
+                        .setStyle(ButtonStyle.Success),
+                    new ButtonBuilder()
+                        .setCustomId(`settle_loss_${betId}`)
+                        .setLabel('Loss')
+                        .setStyle(ButtonStyle.Danger),
+                    new ButtonBuilder()
+                        .setCustomId(`settle_push_${betId}`)
+                        .setLabel('Push')
+                        .setStyle(ButtonStyle.Secondary)
+                );
+
+                const actionRow = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder()
+                        .setCustomId(`edit_bet_${betId}`)
+                        .setLabel('Edit')
+                        .setStyle(ButtonStyle.Primary),
+                    new ButtonBuilder()
+                        .setCustomId(`delete_bet_${betId}`)
+                        .setLabel('Delete')
+                        .setStyle(ButtonStyle.Danger)
+                );
+
+                await trackerChannel.send({
+                    embeds: [embed],
+                    components: [settleRow, actionRow]
+                });
+            }
+        } catch (err) {
+            console.error('Error posting to tracker channel:', err);
+        }
+    }
+
     return interaction.reply({
-        content: `Added bet: **${description}**\nCapper: **${capperUsername}**`,
+        content: `✅ Added bet: **${description}**\nCapper: **${capperUsername}**`,
         ephemeral: true
     });
 }
 
+
 // ------------------------------------------------------------
-// FIX BET HANDLER
+// ADD LADDER HANDLER (ADMIN)
 // ------------------------------------------------------------
-async function handleFixBet(interaction) {
-    const betId = interaction.options.getString('bet_id');
+async function handleAddLadder(interaction) {
+    const { ActionRowBuilder, StringSelectMenuBuilder } = require('discord.js');
 
-    const newDescription = interaction.options.getString('description');
-    const newSport = interaction.options.getString('sport');
-    const newRisk = interaction.options.getNumber('risk');
-    const newOdds = interaction.options.getNumber('odds');
-    const newMessageId = interaction.options.getString('message_id');
+    const stepSelect = new StringSelectMenuBuilder()
+        .setCustomId('admin_ladder_step_count')
+        .setPlaceholder('Select number of steps')
+        .addOptions(
+            { label: '2 Steps', value: '2' },
+            { label: '3 Steps', value: '3' },
+            { label: '4 Steps', value: '4' },
+            { label: '5 Steps', value: '5' }
+        );
 
-    // Fetch current values so we can recalc payout if needed
-    const { rows } = await pool.query(
-        `SELECT risk, odds FROM bets WHERE id = $1`,
-        [betId]
-    );
-
-    if (rows.length === 0) {
-        return interaction.reply({
-            content: 'Bet not found.',
-            ephemeral: true
-        });
-    }
-
-    let risk = rows[0].risk;
-    let odds = rows[0].odds;
-
-    if (newRisk !== null) risk = newRisk;
-    if (newOdds !== null) odds = newOdds;
-
-    // Recalculate payout
-    let payout;
-    if (odds < 0) {
-        payout = (risk * 100) / Math.abs(odds);
-    } else {
-        payout = (risk * odds) / 100;
-    }
-    payout = Number(payout.toFixed(2));
-
-    const updates = [];
-    const values = [];
-    let idx = 1;
-
-    if (newDescription) {
-        updates.push(`bet_description = $${idx++}`);
-        values.push(newDescription);
-    }
-    if (newRisk !== null) {
-        updates.push(`risk = $${idx++}`);
-        values.push(newRisk);
-    }
-    if (newOdds !== null) {
-        updates.push(`odds = $${idx++}`);
-        values.push(newOdds);
-    }
-    if (newMessageId) {
-        updates.push(`message_id = $${idx++}`);
-        values.push(newMessageId);
-    }
-    if (newSport) {
-        updates.push(`sport = $${idx++}`);
-        values.push(newSport);
-    }
-
-    // Always update payout if risk or odds changed
-    updates.push(`payout = $${idx++}`);
-    values.push(payout);
-
-    values.push(betId);
-
-    await pool.query(
-        `UPDATE bets SET ${updates.join(', ')}
-         WHERE id = $${idx}`,
-        values
-    );
+    const row = new ActionRowBuilder().addComponents(stepSelect);
 
     return interaction.reply({
-        content: `Bet **${betId}** updated successfully.`,
-        ephemeral: true
-    });
-}
-
-// ------------------------------------------------------------
-// DELETE BET HANDLER
-// ------------------------------------------------------------
-async function handleDeleteBet(interaction) {
-    const betId = interaction.options.getString('bet_id');
-
-    await pool.query(
-        `DELETE FROM bets WHERE id = $1`,
-        [betId]
-    );
-
-    return interaction.reply({
-        content: `Bet **${betId}** has been deleted.`,
+        content: 'How many steps does this ladder have?',
+        components: [row],
         ephemeral: true
     });
 }

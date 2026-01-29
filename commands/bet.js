@@ -5,7 +5,10 @@ const {
     ActionRowBuilder,
     ButtonBuilder,
     ButtonStyle,
-    StringSelectMenuBuilder
+    StringSelectMenuBuilder,
+    ModalBuilder,
+    TextInputBuilder,
+    TextInputStyle
 } = require('discord.js');
 const { channel } = require('diagnostics_channel');
 
@@ -16,38 +19,7 @@ module.exports = {
         .addSubcommand(sub =>
             sub
                 .setName('post')
-                .setDescription('Post a new bet')
-                .addStringOption(option =>
-                    option.setName('description')
-                        .setDescription('Describe your bet')
-                        .setRequired(true)
-                )
-                .addNumberOption(option =>
-                    option.setName('risk')
-                        .setDescription('Units risked')
-                        .setRequired(true)
-                )
-                .addStringOption(option =>
-                    option.setName('sport')
-                        .setDescription('Sport (for tracking) use multi for cross sports bets')
-                        .setRequired(true)
-                )
-                .addNumberOption(option =>
-                    option.setName('odds')
-                        .setDescription('Odds when you placed the bet for tracking purposes')
-                        .setRequired(true)
-                )
-                .addStringOption(option =>
-                    option.setName('link')
-                        .setDescription('Optional link to the bet')
-                        .setRequired(false)
-                )
-                .addAttachmentOption(option =>
-                    option.setName('screenshot')
-                        .setDescription('Optional screenshot of the bet')
-                        .setRequired(false)
-                )
-                
+                .setDescription('Post a new bet (opens form)')
         )
         .addSubcommand(sub =>
             sub
@@ -58,109 +30,52 @@ module.exports = {
     async execute(interaction) {
         const sub = interaction.options.getSubcommand();
 
-        if (sub === 'post') return handlePost(interaction);
+        if (sub === 'post') return handlePostCommand(interaction);
         if (sub === 'settle') return handleSettle(interaction);
     }
 };
 
 // ------------------------------------------------------------
-// POST HANDLER (AUTO-PING VERSION)
+// POST COMMAND - SHOW MODAL
 // ------------------------------------------------------------
-async function handlePost(interaction) {
-    const userId = interaction.user.id;
-    const username = interaction.user.username;
+async function handlePostCommand(interaction) {
+    const modal = new ModalBuilder()
+        .setCustomId('bet_post_modal')
+        .setTitle('Post a New Bet');
 
-    const description = interaction.options.getString('description');
-    const risk = interaction.options.getNumber('risk');
-    const sport = interaction.options.getString('sport');
-    const odds = interaction.options.getNumber('odds');
-    const link = interaction.options.getString('link') || null;
+    const descInput = new TextInputBuilder()
+        .setCustomId('description')
+        .setLabel('Bet Description')
+        .setStyle(TextInputStyle.Paragraph)
+        .setRequired(true);
 
-    const screenshot = interaction.options.getAttachment('screenshot');
-    const screenshotUrl = screenshot ? screenshot.url : null;
+    const riskInput = new TextInputBuilder()
+        .setCustomId('risk')
+        .setLabel('Risk (units)')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(true);
 
-    // payout calc
-    let payout;
-    if (odds < 0) payout = (risk * 100) / Math.abs(odds);
-    else payout = (risk * odds) / 100;
-    payout = Number(payout.toFixed(2));
+    const sportInput = new TextInputBuilder()
+        .setCustomId('sport')
+        .setLabel('Sport (NFL, NBA, etc.)')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(true);
 
-    const id = randomUUID();
-    const timestamp = Date.now();
+    const oddsInput = new TextInputBuilder()
+        .setCustomId('odds')
+        .setLabel('Odds (e.g., -110, +150)')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(true);
 
-    try {
-        // Insert bet
-        await pool.query(
-            `INSERT INTO bets 
-            (id, user_id, username, bet_description, sport, risk, odds, payout, result, timestamp)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending',$9)`,
-            [id, userId, username, description, sport, risk, odds, payout, timestamp]
-        );
 
-        // ------------------------------------------------------------
-        // FETCH AUTO-NOTIFY ROLE FOR THIS CHANNEL
-        // ------------------------------------------------------------
-        const channelId = interaction.channel.id;
+    modal.addComponents(
+        new ActionRowBuilder().addComponents(descInput),
+        new ActionRowBuilder().addComponents(riskInput),
+        new ActionRowBuilder().addComponents(sportInput),
+        new ActionRowBuilder().addComponents(oddsInput),
+    );
 
-        const { rows } = await pool.query(
-            `SELECT notify_role_id 
-             FROM channel_notify_roles 
-             WHERE channel_id = $1`,
-            [channelId]
-        );
-
-        const notifyRoleId = rows[0]?.notify_role_id;
-
-        // ------------------------------------------------------------
-        // BUILD MESSAGE
-        // ------------------------------------------------------------
-        let message = "";
-
-        // Auto-ping if role exists
-        if (notifyRoleId) {
-            message += `<@&${notifyRoleId}>\n`;
-        }
-
-        message += `**${description}**\n`;
-        message += `Risk: **${risk}u**\n`;
-
-        // Link button
-        let components = [];
-        if (link) {
-            const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder()
-                    .setLabel('Link')
-                    .setStyle(ButtonStyle.Link)
-                    .setURL(link)
-                    .setEmoji('🔗')
-            );
-            components.push(row);
-        }
-
-        // ------------------------------------------------------------
-        // SEND MESSAGE WITH ALLOWED MENTIONS
-        // ------------------------------------------------------------
-        const sent = await interaction.reply({
-            content: message,
-            files: screenshotUrl ? [screenshotUrl] : [],
-            components,
-            allowedMentions: notifyRoleId ? { roles: [notifyRoleId] } : undefined,
-            fetchReply: true
-        });
-
-        // Store message_id + channel_id
-        await pool.query(
-            `UPDATE bets SET message_id = $1, channel_id = $2 WHERE id = $3`,
-            [sent.id, sent.channel.id, id]
-        );
-
-    } catch (err) {
-        console.error(err);
-        await interaction.reply({
-            content: 'Error saving your bet.',
-            ephemeral: true
-        });
-    }
+    return interaction.showModal(modal);
 }
 
 // ------------------------------------------------------------

@@ -2,7 +2,9 @@ const {
     ActionRowBuilder,
     ModalBuilder,
     TextInputBuilder,
-    TextInputStyle
+    TextInputStyle,
+    ButtonBuilder,
+    ButtonStyle
 } = require('discord.js');
 
 module.exports = {
@@ -41,82 +43,34 @@ module.exports = {
 
         interaction.client.ladderCache.set(userId, steps);
 
-        // If more steps remain → open next modal
+        // If more steps remain → show button for next step
         if (stepNumber < totalSteps) {
-            return await showNextStepModal(interaction, stepNumber + 1, totalSteps);
+            const button = new ButtonBuilder()
+                .setCustomId(`ladder_next_step_${stepNumber + 1}_${totalSteps}`)
+                .setLabel(`Next Step (${stepNumber + 1}/${totalSteps})`)
+                .setStyle(ButtonStyle.Primary);
+
+            const row = new ActionRowBuilder().addComponents(button);
+
+            return interaction.reply({
+                content: `✅ Step ${stepNumber} saved. Click below for the next step.`,
+                components: [row],
+                flags: 'Ephemeral'
+            });
         }
 
-        // If this was the last step → open final modal
-        return await showFinalModal(interaction);
+        // If this was the last step → show final button
+        const finalButton = new ButtonBuilder()
+            .setCustomId(`ladder_final_step`)
+            .setLabel('Complete Ladder')
+            .setStyle(ButtonStyle.Success);
+
+        const finalRow = new ActionRowBuilder().addComponents(finalButton);
+
+        return interaction.reply({
+            content: `✅ Step ${stepNumber} saved. Click below to complete the ladder.`,
+            components: [finalRow],
+            flags: 'Ephemeral'
+        });
     }
 };
-
-// ------------------------------------------------------------
-// SHOW NEXT STEP MODAL
-// ------------------------------------------------------------
-async function showNextStepModal(interaction, stepNumber, totalSteps) {
-    const modal = new ModalBuilder()
-        .setCustomId(`ladder_step_modal_${stepNumber}_${totalSteps}`)
-        .setTitle(`Ladder Step ${stepNumber}`);
-
-    const descInput = new TextInputBuilder()
-        .setCustomId('description')
-        .setLabel(`Description for Step ${stepNumber}`)
-        .setStyle(TextInputStyle.Paragraph)
-        .setRequired(true);
-
-    const riskInput = new TextInputBuilder()
-        .setCustomId('risk')
-        .setLabel(`Risk for Step ${stepNumber}`)
-        .setStyle(TextInputStyle.Short)
-        .setRequired(true);
-
-    const oddsInput = new TextInputBuilder()
-        .setCustomId('odds')
-        .setLabel(`Odds for Step ${stepNumber}`)
-        .setStyle(TextInputStyle.Short)
-        .setRequired(true);
-
-    modal.addComponents(
-        new ActionRowBuilder().addComponents(descInput),
-        new ActionRowBuilder().addComponents(riskInput),
-        new ActionRowBuilder().addComponents(oddsInput)
-    );
-
-    return interaction.showModal(modal);
-}
-
-// ------------------------------------------------------------
-// SHOW FINAL MODAL (sport, link, screenshot)
-// ------------------------------------------------------------
-async function showFinalModal(interaction) {
-    const modal = new ModalBuilder()
-        .setCustomId('ladder_final_modal')
-        .setTitle('Overall Ladder Details');
-
-    const overallInput = new TextInputBuilder()
-        .setCustomId('overall_description')
-        .setLabel('Overall Description')
-        .setStyle(TextInputStyle.Paragraph)
-        .setRequired(true);
-
-    const sportInput = new TextInputBuilder()
-        .setCustomId('sport')
-        .setLabel('Sport')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(true);
-
-    const screenshotInput = new TextInputBuilder()
-        .setCustomId('screenshot')
-        .setLabel('Optional Screenshot URL')
-        .setStyle(TextInputStyle.Short)
-        .setRequired(false);
-
-    modal.addComponents(
-        new ActionRowBuilder().addComponents(overallInput),
-        new ActionRowBuilder().addComponents(sportInput),
-        new ActionRowBuilder().addComponents(screenshotInput)
-    );
-
-    return interaction.showModal(modal);
-}
