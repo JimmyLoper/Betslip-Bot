@@ -1,18 +1,13 @@
-const {
-    ActionRowBuilder,
-    ButtonBuilder,
-    ButtonStyle
-} = require('discord.js');
-
-// ------------------------------------------------------------
+// ============================================================
 // SETTLE SELECT HANDLER (EPHEMERAL REPLACE)
-// ------------------------------------------------------------
+// ============================================================
 module.exports = {
-    customIds: ['settle_select'],
+    customIds: ['settle_select', 'settle_select_page2', 'settle_select_page3'],
 
     async execute(interaction) {
         const userId = interaction.user.id;
-        const [_, __, ownerId] = interaction.customId.split('_');
+        const parts = interaction.customId.split('_');
+        const ownerId = parts[parts.length - 1]; // Last part is always the userId
 
         if (ownerId !== userId) {
             return interaction.reply({

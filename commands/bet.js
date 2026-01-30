@@ -120,21 +120,65 @@ async function handleSettle(interaction) {
         });
     }
 
+    // Discord dropdown max is 25 options, so paginate if needed
     const options = rows.map(bet => ({
         label: bet.bet_description.substring(0, 100),
         value: bet.id
     }));
 
-    const menu = new ActionRowBuilder().addComponents(
+    if (options.length <= 25) {
+        // Single page
+        const menu = new ActionRowBuilder().addComponents(
+            new StringSelectMenuBuilder()
+                .setCustomId(`settle_select_${userId}`)
+                .setPlaceholder('Select a bet to settle')
+                .addOptions(options)
+        );
+
+        return interaction.reply({
+            content: 'Choose a bet to settle:',
+            components: [menu],
+            ephemeral: true
+        });
+    }
+
+    // Multiple pages needed
+    const firstPageOptions = options.slice(0, 25);
+    const secondPageOptions = options.slice(25, 50);
+    const thirdPageOptions = options.slice(50, 75);
+
+    const menu1 = new ActionRowBuilder().addComponents(
         new StringSelectMenuBuilder()
             .setCustomId(`settle_select_${userId}`)
-            .setPlaceholder('Select a bet to settle')
-            .addOptions(options)
+            .setPlaceholder(`Select a bet (Page 1 of ${Math.ceil(options.length / 25)})`)
+            .addOptions(firstPageOptions)
     );
 
+    const components = [menu1];
+
+    if (secondPageOptions.length > 0) {
+        const menu2 = new ActionRowBuilder().addComponents(
+            new StringSelectMenuBuilder()
+                .setCustomId(`settle_select_page2_${userId}`)
+                .setPlaceholder(`Select a bet (Page 2 of ${Math.ceil(options.length / 25)})`)
+                .addOptions(secondPageOptions)
+        );
+        components.push(menu2);
+    }
+
+    if (thirdPageOptions.length > 0) {
+        const menu3 = new ActionRowBuilder().addComponents(
+            new StringSelectMenuBuilder()
+                .setCustomId(`settle_select_page3_${userId}`)
+                .setPlaceholder(`Select a bet (Page 3 of ${Math.ceil(options.length / 25)})`)
+                .addOptions(thirdPageOptions)
+        );
+        components.push(menu3);
+    }
+
     return interaction.reply({
-        content: 'Choose a bet to settle:',
-        components: [menu],
+        content: `Choose a bet to settle (${options.length} total):`,
+        components,
         ephemeral: true
     });
 }

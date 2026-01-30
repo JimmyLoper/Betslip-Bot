@@ -36,7 +36,7 @@ module.exports = {
             );
 
             return interaction.update({
-                content: `Do you want to send a message for this **WIN**?`,
+                content: `Do you want to reply to the original post in your channel for this **WIN**?`,
                 components: [row],
                 ephemeral: true
             });
@@ -58,7 +58,7 @@ module.exports = {
         );
 
         return interaction.update({
-            content: `Do you want to send a message for this **${result.toUpperCase()}**?`,
+            content: `Do you want to reply to the original post in your channel for this **${result.toUpperCase()}**?`,
             components: [row],
             ephemeral: true
         });

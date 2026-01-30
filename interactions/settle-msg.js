@@ -48,7 +48,7 @@ module.exports = {
 
         const input = new TextInputBuilder()
             .setCustomId('settle_message_input')
-            .setLabel('Message to send to the bet post')
+            .setLabel('Message to reply to original post')
             .setStyle(TextInputStyle.Paragraph)
             .setRequired(true);
 
