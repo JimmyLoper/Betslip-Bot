@@ -15,13 +15,13 @@ module.exports = {
 
         const overallInput = new TextInputBuilder()
             .setCustomId('overall_description')
-            .setLabel('Overall Description')
+            .setLabel('Description for the message being posted')
             .setStyle(TextInputStyle.Paragraph)
             .setRequired(true);
 
         const sportInput = new TextInputBuilder()
             .setCustomId('sport')
-            .setLabel('Sport')
+            .setLabel('Sport (for tracking)')
             .setStyle(TextInputStyle.Short)
             .setRequired(true);
 

@@ -215,6 +215,41 @@ client.on('messageCreate', async message => {
     }
 });
 
+// ============================================================
+// BOT MENTION NOTIFICATION
+// ============================================================
+client.on('messageCreate', async message => {
+    try {
+        if (message.author?.bot) return;
+        
+        // Check if bot is mentioned
+        if (!message.mentions.has(client.user.id)) return;
+
+        const adminId = process.env.ADMIN_OVERRIDE_ID;
+        if (!adminId) return;
+
+        // DM the admin
+        const admin = await client.users.fetch(adminId).catch(() => null);
+        if (!admin) return;
+
+        const embed = new (require('discord.js').EmbedBuilder)()
+            .setTitle('Bot Mentioned!')
+            .setDescription(`Someone mentioned you in ${message.guild?.name || 'DM'}`)
+            .addFields(
+                { name: 'User', value: `${message.author} (${message.author.id})`, inline: false },
+                { name: 'Channel', value: message.channel?.toString() || 'DM', inline: false },
+                { name: 'Message', value: message.content.substring(0, 1024), inline: false }
+            )
+            .setColor(0xFFA500)
+            .setTimestamp()
+            .setFooter({ text: `Message ID: ${message.id}` });
+
+        await admin.send({ embeds: [embed] }).catch(err => console.error('Failed to send DM:', err));
+    } catch (err) {
+        console.error('Error in bot mention handler:', err);
+    }
+});
+
 function findInteractionHandler(customId) {
     // Exact match first
     if (client.interactions.has(customId)) {

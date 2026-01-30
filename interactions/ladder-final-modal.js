@@ -145,7 +145,7 @@ ${stepsText}`;
         const linkRow = new ActionRowBuilder().addComponents(yesButton, noButton);
 
         return interaction.reply({
-            content: `✅ Ladder posted with ${steps.length} steps! You may also upload a screenshot in this channel within 3 minutes to attach it to the bet. Would you like to add a link?`,
+            content: `✅ Ladder or multiple bets posted with ${steps.length} steps/bets! You may also upload a screenshot in this channel within 3 minutes to attach it to the bet. Would you like to add a link?`,
             components: [linkRow],
             flags: 'Ephemeral'
         });
@@ -169,7 +169,7 @@ async function getTrackerChannelForUser(capperId) {
 // Post individual ladder step to tracker channel
 async function postLadderStepToTracker(channel, step, stepNumber, betId, overallSport) {
     const embed = new EmbedBuilder()
-        .setTitle(`Ladder Step ${stepNumber}`)
+        .setTitle(`Step/Bet ${stepNumber}`)
         .setDescription(step.description)
         .setColor(0x3498db)
         .addFields(

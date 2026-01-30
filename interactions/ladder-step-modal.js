@@ -47,13 +47,13 @@ module.exports = {
         if (stepNumber < totalSteps) {
             const button = new ButtonBuilder()
                 .setCustomId(`ladder_next_step_${stepNumber + 1}_${totalSteps}`)
-                .setLabel(`Next Step (${stepNumber + 1}/${totalSteps})`)
+                .setLabel(`Next Step/Bet (${stepNumber + 1}/${totalSteps})`)
                 .setStyle(ButtonStyle.Primary);
 
             const row = new ActionRowBuilder().addComponents(button);
 
             return interaction.reply({
-                content: `✅ Step ${stepNumber} saved. Click below for the next step.`,
+                content: `✅ Step/Bet ${stepNumber} saved. Click below for the next step.`,
                 components: [row],
                 flags: 'Ephemeral'
             });
@@ -62,13 +62,13 @@ module.exports = {
         // If this was the last step → show final button
         const finalButton = new ButtonBuilder()
             .setCustomId(`ladder_final_step`)
-            .setLabel('Complete Ladder')
+            .setLabel('Complete Ladder/Multiple Bets')
             .setStyle(ButtonStyle.Success);
 
         const finalRow = new ActionRowBuilder().addComponents(finalButton);
 
         return interaction.reply({
-            content: `✅ Step ${stepNumber} saved. Click below to complete the ladder.`,
+            content: `✅ Step/Bet ${stepNumber} saved. Click below to complete the ladder/multiple bets.`,
             components: [finalRow],
             flags: 'Ephemeral'
         });

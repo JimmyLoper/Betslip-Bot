@@ -15,23 +15,23 @@ module.exports = {
         // Show the next step modal
         const modal = new ModalBuilder()
             .setCustomId(`ladder_step_modal_${stepNumber}_${totalSteps}`)
-            .setTitle(`Ladder Step ${stepNumber}`);
+            .setTitle(`Step/Bet ${stepNumber}`);
 
         const descInput = new TextInputBuilder()
             .setCustomId('description')
-            .setLabel(`Description for Step ${stepNumber}`)
+            .setLabel(`Description for Step/Bet ${stepNumber}`)
             .setStyle(TextInputStyle.Paragraph)
             .setRequired(true);
 
         const riskInput = new TextInputBuilder()
             .setCustomId('risk')
-            .setLabel(`Risk for Step ${stepNumber}`)
+            .setLabel(`Risk for Step/Bet ${stepNumber}`)
             .setStyle(TextInputStyle.Short)
             .setRequired(true);
 
         const oddsInput = new TextInputBuilder()
             .setCustomId('odds')
-            .setLabel(`Odds for Step ${stepNumber}`)
+            .setLabel(`Odds for Step/Bet ${stepNumber}`)
             .setStyle(TextInputStyle.Short)
             .setRequired(true);
 
