@@ -50,6 +50,7 @@ if (fs.existsSync(interactionsPath)) {
             for (const id of handler.customIds) {
                 client.interactions.set(id, handler);
             }
+            console.log(`Loaded handler ${file} with customIds:`, handler.customIds);
         }
     }
 }
@@ -102,18 +103,24 @@ client.on('interactionCreate', async interaction => {
     // ------------------------------------------------------------
     // BUTTONS
     // ------------------------------------------------------------
+    // BUTTONS
     if (interaction.isButton()) {
         const handler = findInteractionHandler(interaction.customId);
-        if (!handler) return;
+        if (!handler) {
+            console.warn(`No handler found for button customId: ${interaction.customId}`);
+            return;
+        }
 
         try {
             await handler.execute(interaction);
         } catch (err) {
-            console.error(err);
-            await interaction.reply({
-                content: 'Error handling button.',
-                ephemeral: true
-            });
+            console.error(`Error in button handler for ${interaction.customId}:`, err);
+            if (!interaction.replied && !interaction.deferred) {
+                await interaction.reply({
+                    content: 'Error handling button.',
+                    ephemeral: true
+                });
+            }
         }
         return;
     }
@@ -228,13 +235,21 @@ client.on('messageCreate', async message => {
         const adminId = process.env.ADMIN_OVERRIDE_ID;
         if (!adminId) return;
 
+        // Check if this channel is a registered bet channel
+        const { rows } = await db.query(
+            `SELECT 1 FROM channel_notify_roles WHERE channel_id = $1`,
+            [message.channelId]
+        );
+
+        if (rows.length === 0) return; // Channel not registered, ignore
+
         // DM the admin
         const admin = await client.users.fetch(adminId).catch(() => null);
         if (!admin) return;
 
         const embed = new (require('discord.js').EmbedBuilder)()
             .setTitle('Bot Mentioned!')
-            .setDescription(`Someone mentioned you in ${message.guild?.name || 'DM'}`)
+            .setDescription(`Someone mentioned the bot in ${message.guild?.name || 'DM'}`)
             .addFields(
                 { name: 'User', value: `${message.author} (${message.author.id})`, inline: false },
                 { name: 'Channel', value: message.channel?.toString() || 'DM', inline: false },
@@ -253,16 +268,19 @@ client.on('messageCreate', async message => {
 function findInteractionHandler(customId) {
     // Exact match first
     if (client.interactions.has(customId)) {
+        console.log(`Found exact match for customId: ${customId}`);
         return client.interactions.get(customId);
     }
 
     // Prefix match (for ladder_step_modal_1_5, etc.)
     for (const [id, handler] of client.interactions.entries()) {
         if (customId.startsWith(id)) {
+            console.log(`Found prefix match for customId: ${customId} using prefix: ${id}`);
             return handler;
         }
     }
 
+    console.log(`NO HANDLER FOUND for customId: ${customId}`);
     return null;
 }
 

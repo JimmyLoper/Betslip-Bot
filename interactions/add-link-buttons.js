@@ -2,51 +2,114 @@ const {
     ModalBuilder,
     TextInputBuilder,
     TextInputStyle,
-    ActionRowBuilder
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle
 } = require('discord.js');
+const db = require('../utils/db');
 
 module.exports = {
-    customIds: ['add_link_yes', 'add_link_no'],
+    customIds: ['add_link_yes', 'add_link_no', 'add_bet_link'],
 
     async execute(interaction) {
-        const customId = interaction.customId;
-        const parts = customId.split('_');
-        const action = parts[2]; // 'yes' or 'no'
-        const betId = parts[3];
+        if (interaction.customId.startsWith('add_bet_link')) {
+            return handleAddLinkModal(interaction);
+        }
 
-        if (action === 'no') {
-            // Simply update the message to show they declined
-            return interaction.update({
-                content: '❌ Skipped adding a link.',
-                components: [],
+        return handleAddLinkButtons(interaction);
+    }
+};
+
+// ============================================================
+// ADD LINK YES/NO BUTTONS
+// ============================================================
+async function handleAddLinkButtons(interaction) {
+    const customId = interaction.customId;
+    const parts = customId.split('_');
+    const action = parts[2]; // 'yes' or 'no'
+    const betId = parts.slice(3).join('_');
+
+    if (action === 'no') {
+        return interaction.update({
+            content: 'Skipped adding a link.',
+            components: [],
+            ephemeral: true
+        });
+    }
+
+    // YES - show modal for link input
+    const modal = new ModalBuilder()
+        .setCustomId(`add_bet_link_${betId}`)
+        .setTitle('Add Link to Bet');
+
+    const linkInput = new TextInputBuilder()
+        .setCustomId('link')
+        .setLabel('URL (e.g., https://example.com)')
+        .setStyle(TextInputStyle.Short)
+        .setRequired(true);
+
+    modal.addComponents(new ActionRowBuilder().addComponents(linkInput));
+
+    return interaction.showModal(modal);
+}
+
+// ============================================================
+// ADD LINK MODAL
+// ============================================================
+async function handleAddLinkModal(interaction) {
+    const betId = interaction.customId.split('_').slice(3).join('_');
+    const link = interaction.fields.getTextInputValue('link');
+
+    try {
+        // Fetch bet's message info from DB
+        const { rows } = await db.query(
+            `SELECT message_id, channel_id FROM bets WHERE id = $1`,
+            [betId]
+        );
+
+        if (rows.length === 0) {
+            return interaction.reply({
+                content: '❌ Bet not found.',
                 ephemeral: true
             });
         }
 
-        // Try to delete the button message
-        try {
-            await interaction.message.delete();
-        } catch (err) {
-            // ignore unknown message error
-            if (err && err.code !== 10008) console.error('Could not delete link prompt message:', err);
+        const { message_id, channel_id } = rows[0];
+
+        // Fetch the original bet message and add link button
+        const channel = await interaction.client.channels.fetch(channel_id);
+        const message = await channel.messages.fetch(message_id);
+
+        if (!message) {
+            return interaction.reply({
+                content: '❌ Original message not found.',
+                ephemeral: true
+            });
         }
 
-        // Show modal to add link
-        // NOTE: showModal() auto-acknowledges the interaction, do NOT defer before this
-        const modal = new ModalBuilder()
-            .setCustomId(`add_bet_link_${betId}`)
-            .setTitle('Add Link to Bet');
+        // Create link button
+        const linkButton = new ButtonBuilder()
+            .setLabel('Link')
+            .setStyle(ButtonStyle.Link)
+            .setURL(link)
+            .setEmoji('🔗');
 
-        const linkInput = new TextInputBuilder()
-            .setCustomId('link')
-            .setLabel('Bet Link (URL)')
-            .setStyle(TextInputStyle.Short)
-            .setRequired(true);
+        const linkRow = new ActionRowBuilder().addComponents(linkButton);
 
-        modal.addComponents(
-            new ActionRowBuilder().addComponents(linkInput)
-        );
+        // Update message with link button
+        const newComponents = [...message.components, linkRow];
+        await message.edit({ components: newComponents });
 
-        return interaction.showModal(modal);
+        return interaction.reply({
+            content: '✅ Link added successfully!',
+            ephemeral: true
+        });
+
+    } catch (err) {
+        console.error('Error adding link:', err);
+        return interaction.reply({
+            content: '❌ Error adding link to bet.',
+            ephemeral: true
+        });
     }
-};
+}
