@@ -40,8 +40,13 @@ module.exports = {
             return handleTrackerButtons(interaction);
         }
 
-        // ===== SETTLE BUTTONS (WIN/LOSS/PUSH) - From /bet settle =====
+        // ===== SETTLE BUTTONS (WIN/LOSS/PUSH) - From /bet settle or old tracker messages =====
         if (customId.startsWith('settle_win') || customId.startsWith('settle_loss') || customId.startsWith('settle_push')) {
+            // If no '_cmd' flag, it's an old tracker message - use tracker handler
+            if (!customId.endsWith('_cmd')) {
+                return handleTrackerButtons(interaction);
+            }
+            // Otherwise it's from /bet settle command
             return handleSettleButtons(interaction);
         }
 
@@ -112,8 +117,17 @@ async function handleAdminSettleSelect(interaction) {
 async function handleTrackerButtons(interaction) {
     const parts = interaction.customId.split('_');
     // settle_tracker_win_<betId> or settle_tracker_loss_<betId> or settle_tracker_push_<betId>
-    const result = parts[2]; // win / loss / push
-    const betId = parts.slice(3).join('_');
+    // OR old format: settle_win_<betId> or settle_loss_<betId> or settle_push_<betId>
+    let result, betId;
+    
+    if (parts[0] === 'settle' && (parts[1] === 'tracker')) {
+        result = parts[2]; // win / loss / push
+        betId = parts.slice(3).join('_');
+    } else {
+        result = parts[1]; // win / loss / push
+        betId = parts.slice(2).join('_');
+    }
+    
     const graderId = interaction.user.id;
 
     try {
