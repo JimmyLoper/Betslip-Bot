@@ -296,15 +296,15 @@ async function handleLadderFinalModal(interaction) {
 
                         const settleRow = new ActionRowBuilder().addComponents(
                             new ButtonBuilder()
-                                .setCustomId(`settle_win_${betId}`)
+                                .setCustomId(`settle_tracker_win_${betId}`)
                                 .setLabel('Win')
                                 .setStyle(ButtonStyle.Success),
                             new ButtonBuilder()
-                                .setCustomId(`settle_loss_${betId}`)
+                                .setCustomId(`settle_tracker_loss_${betId}`)
                                 .setLabel('Loss')
                                 .setStyle(ButtonStyle.Danger),
                             new ButtonBuilder()
-                                .setCustomId(`settle_push_${betId}`)
+                                .setCustomId(`settle_tracker_push_${betId}`)
                                 .setLabel('Push')
                                 .setStyle(ButtonStyle.Secondary)
                         );

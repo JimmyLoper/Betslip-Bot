@@ -13,6 +13,9 @@ const {
 module.exports = {
     customIds: [
         'settle_win', 'settle_loss', 'settle_push',
+        'settle_tracker_win', 'settle_tracker_loss', 'settle_tracker_push',
+        'settle_admin_select', 'settle_admin_select_page2', 'settle_admin_select_page3',
+        'settle_admin_win', 'settle_admin_loss', 'settle_admin_push',
         'settle_select', 'settle_select_page2', 'settle_select_page3',
         'settle_msg',
         'settle_modal',
@@ -22,7 +25,22 @@ module.exports = {
     async execute(interaction) {
         const customId = interaction.customId;
 
-        // ===== SETTLE BUTTONS (WIN/LOSS/PUSH) =====
+        // ===== ADMIN SETTLE SELECT MENUS =====
+        if (customId.startsWith('settle_admin_select')) {
+            return handleAdminSettleSelect(interaction);
+        }
+
+        // ===== ADMIN SETTLE BUTTONS (WIN/LOSS/PUSH) - Direct settle =====
+        if (customId.startsWith('settle_admin_win') || customId.startsWith('settle_admin_loss') || customId.startsWith('settle_admin_push')) {
+            return handleAdminSettleButtons(interaction);
+        }
+
+        // ===== TRACKER BUTTONS (WIN/LOSS/PUSH) - Direct settle =====
+        if (customId.startsWith('settle_tracker_win') || customId.startsWith('settle_tracker_loss') || customId.startsWith('settle_tracker_push')) {
+            return handleTrackerButtons(interaction);
+        }
+
+        // ===== SETTLE BUTTONS (WIN/LOSS/PUSH) - From /bet settle =====
         if (customId.startsWith('settle_win') || customId.startsWith('settle_loss') || customId.startsWith('settle_push')) {
             return handleSettleButtons(interaction);
         }
@@ -48,6 +66,121 @@ module.exports = {
         }
     }
 };
+
+// ============================================================
+// ADMIN SETTLE SELECT MENU - Shows win/loss/push buttons
+// ============================================================
+async function handleAdminSettleSelect(interaction) {
+    const userId = interaction.user.id;
+    const parts = interaction.customId.split('_');
+    const ownerId = parts[parts.length - 1]; // Last part is userId
+
+    if (ownerId !== userId) {
+        return interaction.reply({
+            content: 'This menu is not for you.',
+            ephemeral: true
+        });
+    }
+
+    const betId = interaction.values[0];
+
+    const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`settle_admin_win_${betId}`)
+            .setLabel('Win')
+            .setStyle(ButtonStyle.Success),
+        new ButtonBuilder()
+            .setCustomId(`settle_admin_loss_${betId}`)
+            .setLabel('Loss')
+            .setStyle(ButtonStyle.Danger),
+        new ButtonBuilder()
+            .setCustomId(`settle_admin_push_${betId}`)
+            .setLabel('Push')
+            .setStyle(ButtonStyle.Secondary)
+    );
+
+    return interaction.update({
+        content: 'Select the result:',
+        components: [row],
+        ephemeral: true
+    });
+}
+
+// ============================================================
+// TRACKER BUTTONS (WIN/LOSS/PUSH) - Direct settle, no message prompt
+// ============================================================
+async function handleTrackerButtons(interaction) {
+    const parts = interaction.customId.split('_');
+    // settle_tracker_win_<betId> or settle_tracker_loss_<betId> or settle_tracker_push_<betId>
+    const result = parts[2]; // win / loss / push
+    const betId = parts.slice(3).join('_');
+    const graderId = interaction.user.id;
+
+    try {
+        await pool.query(
+            `UPDATE bets
+             SET result = $1,
+                 graded_by = $2,
+                 graded_at = $3
+             WHERE id = $4`,
+            [result, graderId, Date.now(), betId]
+        );
+
+        // Remove buttons from the original tracker message and add settlement info
+        const currentContent = interaction.message.content || '';
+        const settledText = `\n\nSettled as a **${result.toUpperCase()}**`;
+        
+        await interaction.message.edit({
+            content: currentContent + settledText,
+            components: []
+        });
+
+        return interaction.reply({
+            content: `Bet settled as a **${result.toUpperCase()}**.`,
+            ephemeral: true
+        });
+    } catch (err) {
+        console.error('Error in handleTrackerButtons:', err);
+        return interaction.reply({
+            content: '❌ Error settling bet.',
+            ephemeral: true
+        });
+    }
+}
+
+// ============================================================
+// ADMIN SETTLE BUTTONS (WIN/LOSS/PUSH) - Direct settle, no message prompt
+// ============================================================
+async function handleAdminSettleButtons(interaction) {
+    const parts = interaction.customId.split('_');
+    // settle_admin_win_<betId> or settle_admin_loss_<betId> or settle_admin_push_<betId>
+    const result = parts[2]; // win / loss / push
+    const betId = parts.slice(3).join('_');
+    const graderId = interaction.user.id;
+
+    try {
+        await pool.query(
+            `UPDATE bets
+             SET result = $1,
+                 graded_by = $2,
+                 graded_at = $3
+             WHERE id = $4`,
+            [result, graderId, Date.now(), betId]
+        );
+
+        // Just update the interaction, don't modify any messages
+        return interaction.update({
+            components: [],
+            content: `✅ Bet settled as **${result.toUpperCase()}**.`
+        });
+    } catch (err) {
+        console.error('Error in handleAdminSettleButtons:', err);
+        return interaction.reply({
+            content: '❌ Error settling bet.',
+            ephemeral: true
+        });
+    }
+}
 
 // ============================================================
 // SETTLE BUTTONS (WIN/LOSS/PUSH)
@@ -147,6 +280,17 @@ async function handleSettleMsg(interaction) {
     const result = parts[parts.length - (isFromCmd ? 2 : 1)];
     const graderId = interaction.user.id;
 
+    // Fetch tracker message details
+    const { rows } = await pool.query(
+        `SELECT message_id, channel_id
+         FROM bets
+         WHERE id = $1`,
+        [betId]
+    );
+
+    const messageId = rows[0]?.message_id;
+    const channelId = rows[0]?.channel_id;
+
     if (action === 'no') {
         await pool.query(
             `UPDATE bets
@@ -156,6 +300,23 @@ async function handleSettleMsg(interaction) {
              WHERE id = $4`,
             [result, graderId, Date.now(), betId]
         );
+
+        // Update tracker message with settlement info
+        if (messageId && channelId) {
+            try {
+                const channel = await interaction.client.channels.fetch(channelId);
+                const trackerMsg = await channel.messages.fetch(messageId);
+                const currentContent = trackerMsg.content || '';
+                const settledText = `\n\n✅ **Settled as ${result.toUpperCase()}** by <@${graderId}>`;
+                
+                await trackerMsg.edit({
+                    content: currentContent + settledText,
+                    components: []
+                });
+            } catch (err) {
+                console.error('Failed to update tracker message:', err);
+            }
+        }
 
         // If this is from /bet settle command, show settle another
         if (isFromCmd) {
@@ -255,6 +416,15 @@ async function handleSettleModal(interaction) {
             await original.reply({
                 content: finalMessage,
                 allowedMentions: notifyRoleId ? { roles: [notifyRoleId] } : undefined
+            });
+
+            // Update tracker message with settlement info
+            const currentContent = original.content || '';
+            const settledText = `\n\n✅ **Settled as ${result.toUpperCase()}** by <@${graderId}>`;
+            
+            await original.edit({
+                content: currentContent + settledText,
+                components: []
             });
 
         } catch (err) {
