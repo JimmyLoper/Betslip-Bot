@@ -109,9 +109,9 @@ async function handleEditBetModal(interaction) {
     const payout = calculatePayout(newRisk, newOdds);
 
     try {
-        // Fetch bet details to get tracker message info
+        // Fetch bet details to get tracker message info and user_id
         const { rows: betRows } = await db.query(
-            `SELECT tracker_message_id, channel_id FROM bets WHERE id = $1`,
+            `SELECT tracker_message_id, user_id FROM bets WHERE id = $1`,
             [betId]
         );
 
@@ -122,7 +122,22 @@ async function handleEditBetModal(interaction) {
             });
         }
 
-        const { tracker_message_id, channel_id } = betRows[0];
+        const { tracker_message_id, user_id } = betRows[0];
+
+        // Fetch tracker channel from channel_notify_roles
+        const { rows: channelRows } = await db.query(
+            `SELECT tracker_channel_id FROM channel_notify_roles WHERE user_id = $1`,
+            [user_id]
+        );
+
+        if (channelRows.length === 0 || !channelRows[0].tracker_channel_id) {
+            return interaction.reply({
+                content: '❌ Tracker channel not found for this bet.',
+                ephemeral: true
+            });
+        }
+
+        const tracker_channel_id = channelRows[0].tracker_channel_id;
 
         // Update bet in database
         await db.query(
@@ -133,9 +148,9 @@ async function handleEditBetModal(interaction) {
         );
 
         // Update the tracker message embed if it exists
-        if (tracker_message_id && channel_id) {
+        if (tracker_message_id && tracker_channel_id) {
             try {
-                const trackerChannel = await interaction.client.channels.fetch(channel_id);
+                const trackerChannel = await interaction.client.channels.fetch(tracker_channel_id);
                 if (trackerChannel) {
                     const message = await trackerChannel.messages.fetch(tracker_message_id);
                     if (message) {
