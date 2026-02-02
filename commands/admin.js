@@ -128,18 +128,26 @@ async function handleAddBet(interaction) {
     const messageId = interaction.options.getString('message_id');
     const screenshotAttachment = interaction.options.getAttachment('screenshot');
 
-    // Fetch original message to get attachments if not provided
+    // Fetch original message to get attachments and timestamp
     let attachmentUrls = [];
-    if (!screenshotAttachment) {
-        try {
-            const originalMsg = await interaction.channel.messages.fetch(messageId);
-            if (originalMsg && originalMsg.attachments.size > 0) {
+    let ts = Date.now(); // Default to current time
+    
+    try {
+        const originalMsg = await interaction.channel.messages.fetch(messageId);
+        if (originalMsg) {
+            // Use original message timestamp
+            ts = originalMsg.createdTimestamp;
+            
+            // Get attachments if not provided
+            if (!screenshotAttachment && originalMsg.attachments.size > 0) {
                 attachmentUrls = Array.from(originalMsg.attachments.values()).map(att => att.url);
             }
-        } catch (err) {
-            console.error('Failed to fetch original message for attachments:', err);
         }
-    } else {
+    } catch (err) {
+        console.error('Failed to fetch original message:', err);
+    }
+    
+    if (screenshotAttachment) {
         attachmentUrls = [screenshotAttachment.url];
     }
 
@@ -151,7 +159,6 @@ async function handleAddBet(interaction) {
         payout = (risk * odds) / 100;
     }
     payout = Number(payout.toFixed(2));
-    const ts = Date.now();
     const betId = uuidv4();
 
     await pool.query(
