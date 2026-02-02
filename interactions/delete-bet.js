@@ -69,10 +69,36 @@ async function handleDeleteConfirm(interaction) {
     const betId = parts[3];
 
     if (action === 'cancel') {
+        // Rebuild original buttons
+        const settleRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`settle_tracker_win_${betId}`)
+                .setLabel('Win')
+                .setStyle(ButtonStyle.Success),
+            new ButtonBuilder()
+                .setCustomId(`settle_tracker_loss_${betId}`)
+                .setLabel('Loss')
+                .setStyle(ButtonStyle.Danger),
+            new ButtonBuilder()
+                .setCustomId(`settle_tracker_push_${betId}`)
+                .setLabel('Push')
+                .setStyle(ButtonStyle.Secondary)
+        );
+
+        const actionRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`edit_bet_${betId}`)
+                .setLabel('Edit')
+                .setStyle(ButtonStyle.Primary),
+            new ButtonBuilder()
+                .setCustomId(`delete_bet_${betId}`)
+                .setLabel('Delete')
+                .setStyle(ButtonStyle.Danger)
+        );
+
         return interaction.update({
-            content: '❌ Delete cancelled.',
-            components: [],
-            ephemeral: true
+            content: '',
+            components: [settleRow, actionRow]
         });
     }
 
