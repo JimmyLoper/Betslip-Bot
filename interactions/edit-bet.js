@@ -111,7 +111,7 @@ async function handleEditBetModal(interaction) {
     try {
         // Fetch bet details to get tracker message info
         const { rows: betRows } = await db.query(
-            `SELECT message_id, channel_id FROM bets WHERE id = $1`,
+            `SELECT tracker_message_id, channel_id FROM bets WHERE id = $1`,
             [betId]
         );
 
@@ -122,7 +122,7 @@ async function handleEditBetModal(interaction) {
             });
         }
 
-        const { message_id, channel_id } = betRows[0];
+        const { tracker_message_id, channel_id } = betRows[0];
 
         // Update bet in database
         await db.query(
@@ -133,11 +133,11 @@ async function handleEditBetModal(interaction) {
         );
 
         // Update the tracker message embed if it exists
-        if (message_id && channel_id) {
+        if (tracker_message_id && channel_id) {
             try {
                 const trackerChannel = await interaction.client.channels.fetch(channel_id);
                 if (trackerChannel) {
-                    const message = await trackerChannel.messages.fetch(message_id);
+                    const message = await trackerChannel.messages.fetch(tracker_message_id);
                     if (message) {
                         const embed = new EmbedBuilder()
                             .setTitle(newDescription)

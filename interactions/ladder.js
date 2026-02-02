@@ -12,6 +12,9 @@ const {
     EmbedBuilder
 } = require('discord.js');
 
+// TODO: Convert ladder to full command-line inputs instead of modal workflow
+// Allow /betladder post to accept step count and bet details as options directly
+
 module.exports = {
     customIds: [
         'ladder_step_count',
@@ -320,10 +323,16 @@ async function handleLadderFinalModal(interaction) {
                                 .setStyle(ButtonStyle.Danger)
                         );
 
-                        await trackerChannel.send({
+                        const trackerMsg = await trackerChannel.send({
                             embeds: [embed],
                             components: [settleRow, actionRow]
                         });
+                        
+                        // Update bet with tracker message ID
+                        await pool.query(
+                            `UPDATE bets SET tracker_message_id = $1 WHERE id = $2`,
+                            [trackerMsg.id, betId]
+                        );
                     }
                 }
             } catch (err) {

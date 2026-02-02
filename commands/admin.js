@@ -40,6 +40,11 @@ module.exports = {
                         .setDescription('Message ID of the betslip')
                         .setRequired(true)
                 )
+                .addAttachmentOption(opt =>
+                    opt.setName('screenshot')
+                        .setDescription('Screenshot/image of betslip (optional)')
+                        .setRequired(false)
+                )
         )
 
         // ------------------------------------------------------------
@@ -57,6 +62,19 @@ module.exports = {
             sub
                 .setName('betsettle')
                 .setDescription('Settle pending bets')
+        )
+
+        // /admin editbet
+        // ------------------------------------------------------------ 
+        .addSubcommand(sub =>
+            sub
+                .setName('editbet')
+                .setDescription('Edit a bet after it has been posted (e.g. to fix details before settlement)')
+                .addStringOption(opt =>
+                    opt.setName('tracker_message_id')
+                        .setDescription('Tracker message ID of the bet to edit')
+                        .setRequired(true)
+                )
         ),
 
     async execute(interaction) {
@@ -74,6 +92,7 @@ module.exports = {
         if (sub === 'addbet') return handleAddBet(interaction);
         if (sub === 'addladder') return handleAddLadder(interaction);
         if (sub === 'betsettle') return handleBetSettle(interaction);
+        if (sub === 'editbet') return handleEditBet(interaction);
     }
 };
 
@@ -103,10 +122,26 @@ async function handleAddBet(interaction) {
     const trackerChannelId = rows[0].tracker_channel_id;
 
     const description = interaction.options.getString('description');
+    const sport = interaction.options.getString('sport');
     const risk = interaction.options.getNumber('risk');
     const odds = interaction.options.getNumber('odds');
-    const sport = interaction.options.getString('sport');
     const messageId = interaction.options.getString('message_id');
+    const screenshotAttachment = interaction.options.getAttachment('screenshot');
+
+    // Fetch original message to get attachments if not provided
+    let attachmentUrls = [];
+    if (!screenshotAttachment) {
+        try {
+            const originalMsg = await interaction.channel.messages.fetch(messageId);
+            if (originalMsg && originalMsg.attachments.size > 0) {
+                attachmentUrls = Array.from(originalMsg.attachments.values()).map(att => att.url);
+            }
+        } catch (err) {
+            console.error('Failed to fetch original message for attachments:', err);
+        }
+    } else {
+        attachmentUrls = [screenshotAttachment.url];
+    }
 
     // Calculate payout
     let payout;
@@ -180,10 +215,17 @@ async function handleAddBet(interaction) {
                         .setStyle(ButtonStyle.Danger)
                 );
 
-                await trackerChannel.send({
+                const trackerMsg = await trackerChannel.send({
                     embeds: [embed],
-                    components: [settleRow, actionRow]
+                    components: [settleRow, actionRow],
+                    files: attachmentUrls
                 });
+                
+                // Update bet with tracker message ID
+                await pool.query(
+                    `UPDATE bets SET tracker_message_id = $1 WHERE id = $2`,
+                    [trackerMsg.id, betId]
+                );
             }
         } catch (err) {
             console.error('Error posting to tracker channel:', err);
@@ -322,4 +364,79 @@ async function handleBetSettle(interaction) {
         components,
         ephemeral: true
     });
+}
+
+// ============================================================
+// EDIT BET HANDLER (Admin emergency edits)
+// ============================================================
+async function handleEditBet(interaction) {
+    const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
+    const { calculatePayout } = require('../utils/calcPayout');
+
+    const trackerMessageId = interaction.options.getString('tracker_message_id');
+
+    // Fetch bet by tracker message ID
+    const { rows } = await pool.query(
+        `SELECT id, bet_description, sport, risk, odds, result FROM bets WHERE tracker_message_id = $1`,
+        [trackerMessageId]
+    );
+
+    if (rows.length === 0) {
+        return interaction.reply({
+            content: '❌ Bet not found with that tracker message ID.',
+            ephemeral: true
+        });
+    }
+
+    const bet = rows[0];
+
+    // Create modal with current bet info
+    const modal = new ModalBuilder()
+        .setCustomId(`admin_editbet_modal_${bet.id}`)
+        .setTitle('Edit Bet');
+
+    const descInput = new TextInputBuilder()
+        .setCustomId('description')
+        .setLabel('Description')
+        .setStyle(TextInputStyle.Paragraph)
+        .setValue(bet.bet_description)
+        .setRequired(true);
+
+    const sportInput = new TextInputBuilder()
+        .setCustomId('sport')
+        .setLabel('Sport')
+        .setStyle(TextInputStyle.Short)
+        .setValue(bet.sport)
+        .setRequired(true);
+
+    const riskInput = new TextInputBuilder()
+        .setCustomId('risk')
+        .setLabel('Risk (units)')
+        .setStyle(TextInputStyle.Short)
+        .setValue(bet.risk.toString())
+        .setRequired(true);
+
+    const oddsInput = new TextInputBuilder()
+        .setCustomId('odds')
+        .setLabel('Odds')
+        .setStyle(TextInputStyle.Short)
+        .setValue(bet.odds.toString())
+        .setRequired(true);
+
+    const resultInput = new TextInputBuilder()
+        .setCustomId('result')
+        .setLabel('Result (pending, win, loss, push)')
+        .setStyle(TextInputStyle.Short)
+        .setValue(bet.result || 'pending')
+        .setRequired(true);
+
+    modal.addComponents(
+        new ActionRowBuilder().addComponents(descInput),
+        new ActionRowBuilder().addComponents(sportInput),
+        new ActionRowBuilder().addComponents(riskInput),
+        new ActionRowBuilder().addComponents(oddsInput),
+        new ActionRowBuilder().addComponents(resultInput)
+    );
+
+    return interaction.showModal(modal);
 }

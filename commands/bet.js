@@ -140,8 +140,16 @@ async function handlePostCommand(interaction) {
             [sent.id, sent.channel.id, id]
         );
 
-        // Post to capper's private tracker channel
-        await postBetToTrackerChannel(interaction.client, userId, id, description, risk, sport, odds, screenshotAttachment?.url, link);
+        // Post to capper's private tracker channel and get tracker message ID
+        const trackerMessageId = await postBetToTrackerChannel(interaction.client, userId, id, description, risk, sport, odds, screenshotAttachment?.url, link);
+        
+        // Update bet with tracker message ID if it was posted
+        if (trackerMessageId) {
+            await pool.query(
+                `UPDATE bets SET tracker_message_id = $1 WHERE id = $2`,
+                [trackerMessageId, id]
+            );
+        }
 
         return interaction.followUp({
             content: '✅ Bet posted successfully!',
@@ -216,15 +224,15 @@ async function postBetToTrackerChannel(client, userId, betId, description, risk,
         );
 
         const files = screenshotUrl ? [screenshotUrl] : [];
-        await trackerChannel.send({
+        const trackerMsg = await trackerChannel.send({
             embeds: [embed],
             components: [settleRow, actionRow],
             files
         });
+        
+        // Return tracker message ID
+        return trackerMsg.id;
     } catch (err) {
         console.error('Error posting to tracker channel:', err);
     }
 }
-
-// ------------------------------------------------------------
-// SETTLE HANDLER - REMOVED - Now in /admin betsettle
