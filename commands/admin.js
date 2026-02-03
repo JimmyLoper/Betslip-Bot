@@ -573,6 +573,9 @@ async function handleAddLadder(interaction) {
     }
 
     try {
+        // Defer reply to acknowledge the interaction before long operations
+        await interaction.deferReply({ ephemeral: true });
+
         // Fetch capper info to get tracker channel
         const { rows: capperRows } = await pool.query(
             `SELECT user_id, username, tracker_channel_id FROM channel_notify_roles WHERE channel_id = $1`,
@@ -580,9 +583,8 @@ async function handleAddLadder(interaction) {
         );
 
         if (capperRows.length === 0) {
-            return interaction.reply({
-                content: 'This channel is not assigned to a capper.',
-                ephemeral: true
+            return interaction.editReply({
+                content: 'This channel is not assigned to a capper.'
             });
         }
 
@@ -652,16 +654,14 @@ async function handleAddLadder(interaction) {
             }
         }
 
-        return interaction.reply({
-            content: `✅ Admin ladder with ${steps.length} steps added successfully!`,
-            ephemeral: true
+        return interaction.editReply({
+            content: `✅ Admin ladder with ${steps.length} steps added successfully!`
         });
 
     } catch (err) {
         console.error('Error adding admin ladder:', err);
-        return interaction.reply({
-            content: 'Error saving your ladder.',
-            ephemeral: true
+        return interaction.editReply({
+            content: 'Error saving your ladder.'
         });
     }
 }
