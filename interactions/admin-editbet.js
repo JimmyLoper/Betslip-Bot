@@ -53,9 +53,9 @@ async function handleAdminEditBetModal(interaction) {
 
         const { tracker_message_id, user_id, result: oldResult } = betRows[0];
 
-        // Fetch tracker channel from channel_notify_roles
+        // Fetch tracker channel from capper_info
         const { rows: channelRows } = await db.query(
-            `SELECT tracker_channel_id FROM channel_notify_roles WHERE user_id = $1`,
+            `SELECT tracker_channel_id FROM capper_info WHERE user_id = $1`,
             [user_id]
         );
 

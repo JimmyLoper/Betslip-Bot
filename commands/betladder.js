@@ -174,7 +174,7 @@ async function handlePostLadder(interaction) {
         // Fetch auto-notify role for this channel
         const { rows: notifyRows } = await pool.query(
             `SELECT notify_role_id 
-             FROM channel_notify_roles 
+             FROM capper_info 
              WHERE channel_id = $1`,
             [interaction.channel.id]
         );
@@ -276,7 +276,7 @@ async function handlePostLadder(interaction) {
 async function postLadderStepToTrackerChannel(client, userId, betId, stepNumber, description, risk, sport, odds, screenshotUrl, link) {
     try {
         const { rows } = await pool.query(
-            `SELECT tracker_channel_id FROM channel_notify_roles WHERE user_id = $1`,
+            `SELECT tracker_channel_id FROM capper_info WHERE user_id = $1`,
             [userId]
         );
 

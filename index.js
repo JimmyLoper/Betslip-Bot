@@ -237,7 +237,7 @@ client.on('messageCreate', async message => {
 
         // Check if this channel is a registered bet channel
         const { rows } = await db.query(
-            `SELECT 1 FROM channel_notify_roles WHERE channel_id = $1`,
+            `SELECT 1 FROM capper_info WHERE channel_id = $1`,
             [message.channelId]
         );
 

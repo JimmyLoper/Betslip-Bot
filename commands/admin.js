@@ -194,7 +194,7 @@ async function handleAddBet(interaction) {
 
     const { rows } = await pool.query(
         `SELECT user_id, username, tracker_channel_id
-         FROM channel_notify_roles
+         FROM capper_info
          WHERE channel_id = $1`,
         [channelId]
     );
@@ -578,7 +578,7 @@ async function handleAddLadder(interaction) {
 
         // Fetch capper info to get tracker channel
         const { rows: capperRows } = await pool.query(
-            `SELECT user_id, username, tracker_channel_id FROM channel_notify_roles WHERE channel_id = $1`,
+            `SELECT user_id, username, tracker_channel_id FROM capper_info WHERE channel_id = $1`,
             [channelId]
         );
 
@@ -672,8 +672,7 @@ async function handleAddLadder(interaction) {
 async function postAdminLadderStepToTrackerChannel(client, userId, betId, stepNumber, description, risk, sport, odds, screenshotUrl, link) {
     try {
         const { rows } = await pool.query(
-            `SELECT tracker_channel_id FROM channel_notify_roles WHERE user_id = $1`,
-            [userId]
+                `SELECT tracker_channel_id FROM capper_info WHERE user_id = $1`,
         );
 
         const trackerChannelId = rows[0]?.tracker_channel_id;

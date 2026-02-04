@@ -401,7 +401,7 @@ async function handleSettleModal(interaction) {
 
     const notifyQuery = await pool.query(
         `SELECT notify_role_id
-         FROM channel_notify_roles
+         FROM capper_info
          WHERE channel_id = $1`,
         [channelId]
     );
