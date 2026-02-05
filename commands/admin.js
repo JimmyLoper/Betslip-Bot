@@ -54,11 +54,6 @@ module.exports = {
                 .setName('addladder')
                 .setDescription('Silently add a multi-step ladder for the capper of this channel')
                 .addStringOption(opt =>
-                    opt.setName('description')
-                        .setDescription('Description to post on the message')
-                        .setRequired(true)
-                )
-                .addStringOption(opt =>
                     opt.setName('sport')
                         .setDescription('Sport (NFL, NBA, etc.)')
                         .setRequired(true)
@@ -136,11 +131,6 @@ module.exports = {
                 .addAttachmentOption(opt =>
                     opt.setName('screenshot')
                         .setDescription('Optional: Screenshot of the bet')
-                        .setRequired(false)
-                )
-                .addStringOption(opt =>
-                    opt.setName('link')
-                        .setDescription('Optional: Link to add to the bet')
                         .setRequired(false)
                 )
         )
@@ -673,6 +663,7 @@ async function postAdminLadderStepToTrackerChannel(client, userId, betId, stepNu
     try {
         const { rows } = await pool.query(
                 `SELECT tracker_channel_id FROM capper_info WHERE user_id = $1`,
+                [userId]
         );
 
         const trackerChannelId = rows[0]?.tracker_channel_id;
