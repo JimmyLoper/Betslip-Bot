@@ -229,6 +229,9 @@ client.on('messageCreate', async message => {
     try {
         if (message.author?.bot) return;
         
+        // Skip if this is a reply to another message
+        if (message.reference) return;
+        
         // Check if bot is mentioned
         if (!message.mentions.has(client.user.id)) return;
 
