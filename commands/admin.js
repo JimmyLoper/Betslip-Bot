@@ -154,6 +154,19 @@ module.exports = {
                         .setDescription('Tracker message ID of the bet to edit')
                         .setRequired(true)
                 )
+        )
+
+        // /admin resetbet
+        // ------------------------------------------------------------ 
+        .addSubcommand(sub =>
+            sub
+                .setName('resetbet')
+                .setDescription('Reset a settled bet back to pending and restore its tracker message buttons')
+                .addStringOption(opt =>
+                    opt.setName('tracker_message_id')
+                        .setDescription('Tracker message ID of the bet to reset')
+                        .setRequired(true)
+                )
         ),
 
     async execute(interaction) {
@@ -172,6 +185,7 @@ module.exports = {
         if (sub === 'addladder') return handleAddLadder(interaction);
         if (sub === 'betsettle') return handleBetSettle(interaction);
         if (sub === 'editbet') return handleEditBet(interaction);
+        if (sub === 'resetbet') return handleResetBet(interaction);
     }
 };
 
@@ -727,5 +741,112 @@ async function postAdminLadderStepToTrackerChannel(client, userId, betId, stepNu
         return trackerMsg.id;
     } catch (err) {
         console.error('Error posting to tracker channel:', err);
+    }
+}
+
+// ============================================================
+// RESET BET HANDLER
+// ============================================================
+async function handleResetBet(interaction) {
+    const trackerMessageId = interaction.options.getString('tracker_message_id');
+    const { ButtonBuilder, ButtonStyle, EmbedBuilder, ActionRowBuilder } = require('discord.js');
+
+    try {
+        // Fetch bet by tracker message ID
+        const { rows } = await pool.query(
+            `SELECT id, bet_description, sport, risk, odds, payout, user_id FROM bets WHERE tracker_message_id = $1`,
+            [trackerMessageId]
+        );
+
+        if (rows.length === 0) {
+            return interaction.reply({
+                content: '❌ Bet not found with that tracker message ID.',
+                ephemeral: true
+            });
+        }
+
+        const bet = rows[0];
+
+        // Update bet: set result to 'pending', clear graded_by and graded_at
+        await pool.query(
+            `UPDATE bets SET result = 'pending', graded_by = NULL, graded_at = NULL WHERE id = $1`,
+            [bet.id]
+        );
+
+        // Find tracker channel via capper_info
+        const { rows: capperRows } = await pool.query(
+            `SELECT tracker_channel_id FROM capper_info WHERE user_id = $1`,
+            [bet.user_id]
+        );
+
+        if (capperRows.length === 0 || !capperRows[0].tracker_channel_id) {
+            return interaction.reply({
+                content: '✅ Bet reset to pending, but tracker message could not be updated.',
+                ephemeral: true
+            });
+        }
+
+        const trackerChannelId = capperRows[0].tracker_channel_id;
+        const trackerChannel = await interaction.client.channels.fetch(trackerChannelId);
+        const trackerMsg = await trackerChannel.messages.fetch(trackerMessageId);
+
+        // Rebuild the embed
+        const embed = new EmbedBuilder()
+            .setTitle(bet.bet_description)
+            .setColor(0x3498db)
+            .addFields(
+                { name: 'Sport', value: bet.sport, inline: true },
+                { name: 'Risk', value: `${bet.risk}u`, inline: true },
+                { name: 'Odds', value: bet.odds.toString(), inline: true },
+                { name: 'Payout', value: `${bet.payout}u`, inline: true }
+            )
+            .setTimestamp();
+
+        // Rebuild settle buttons
+        const settleRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`settle_tracker_win_${bet.id}`)
+                .setLabel('Win')
+                .setStyle(ButtonStyle.Success),
+            new ButtonBuilder()
+                .setCustomId(`settle_tracker_loss_${bet.id}`)
+                .setLabel('Loss')
+                .setStyle(ButtonStyle.Danger),
+            new ButtonBuilder()
+                .setCustomId(`settle_tracker_push_${bet.id}`)
+                .setLabel('Push')
+                .setStyle(ButtonStyle.Secondary)
+        );
+
+        // Rebuild action buttons
+        const actionRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`edit_bet_${bet.id}`)
+                .setLabel('Edit')
+                .setStyle(ButtonStyle.Primary),
+            new ButtonBuilder()
+                .setCustomId(`delete_bet_${bet.id}`)
+                .setLabel('Delete')
+                .setStyle(ButtonStyle.Danger)
+        );
+
+        // Update the message
+        await trackerMsg.edit({
+            content: '',
+            embeds: [embed],
+            components: [settleRow, actionRow]
+        });
+
+        return interaction.reply({
+            content: `✅ Bet reset to pending and tracker message updated.`,
+            ephemeral: true
+        });
+
+    } catch (err) {
+        console.error('Error resetting bet:', err);
+        return interaction.reply({
+            content: '❌ Error resetting bet. Check if tracker message ID is valid.',
+            ephemeral: true
+        });
     }
 }
