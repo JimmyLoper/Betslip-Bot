@@ -61,6 +61,9 @@ module.exports = {
 // POST COMMAND - DIRECT SLASH COMMAND HANDLING
 // ============================================================
 async function handlePostCommand(interaction) {
+    // Defer reply immediately to prevent double-clicks from executing twice
+    await interaction.deferReply({ ephemeral: true });
+
     const userId = interaction.user.id;
     const username = interaction.user.username;
 
@@ -73,9 +76,8 @@ async function handlePostCommand(interaction) {
 
     // Validate inputs
     if (isNaN(risk) || isNaN(odds)) {
-        return interaction.reply({
-            content: 'Risk and odds must be valid numbers.',
-            ephemeral: true
+        return interaction.editReply({
+            content: 'Risk and odds must be valid numbers.'
         });
     }
 
@@ -126,12 +128,11 @@ async function handlePostCommand(interaction) {
 
         // Send message to channel
         const files = screenshotAttachment ? [screenshotAttachment.url] : [];
-        const sent = await interaction.reply({
+        const sent = await interaction.channel.send({
             content: message,
             files,
             components,
-            allowedMentions: notifyRoleId ? { roles: [notifyRoleId] } : undefined,
-            fetchReply: true
+            allowedMentions: notifyRoleId ? { roles: [notifyRoleId] } : undefined
         });
 
         // Update bet with message and channel info
@@ -151,16 +152,14 @@ async function handlePostCommand(interaction) {
             );
         }
 
-        return interaction.followUp({
-            content: '✅ Bet posted successfully!',
-            ephemeral: true
+        return interaction.editReply({
+            content: '✅ Bet posted successfully!'
         });
 
     } catch (err) {
         console.error('Error posting bet:', err);
-        return interaction.reply({
-            content: 'Error saving your bet.',
-            ephemeral: true
+        return interaction.editReply({
+            content: 'Error saving your bet.'
         });
     }
 }
