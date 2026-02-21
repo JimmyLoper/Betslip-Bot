@@ -87,14 +87,6 @@ async function handlePostCommand(interaction) {
     const timestamp = Date.now();
 
     try {
-        // Insert bet into database
-        await pool.query(
-            `INSERT INTO bets 
-            (id, user_id, username, bet_description, sport, risk, odds, payout, result, timestamp)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending',$9)`,
-            [id, userId, username, description, sport, risk, odds, payout, timestamp]
-        );
-
         // Fetch auto-notify role for this channel
         const { rows } = await pool.query(
             `SELECT notify_role_id 
@@ -126,7 +118,7 @@ async function handlePostCommand(interaction) {
             components.push(linkRow);
         }
 
-        // Send message to channel
+        // Send message to channel FIRST (before inserting to DB)
         const files = screenshotAttachment ? [screenshotAttachment.url] : [];
         const sent = await interaction.channel.send({
             content: message,
@@ -135,22 +127,16 @@ async function handlePostCommand(interaction) {
             allowedMentions: notifyRoleId ? { roles: [notifyRoleId] } : undefined
         });
 
-        // Update bet with message and channel info
-        await pool.query(
-            `UPDATE bets SET message_id = $1, channel_id = $2 WHERE id = $3`,
-            [sent.id, sent.channel.id, id]
-        );
-
-        // Post to capper's private tracker channel and get tracker message ID
+        // Post to capper's private tracker channel SECOND (before inserting to DB)
         const trackerMessageId = await postBetToTrackerChannel(interaction.client, userId, id, description, risk, sport, odds, screenshotAttachment?.url, link);
-        
-        // Update bet with tracker message ID if it was posted
-        if (trackerMessageId) {
-            await pool.query(
-                `UPDATE bets SET tracker_message_id = $1 WHERE id = $2`,
-                [trackerMessageId, id]
-            );
-        }
+
+        // Only INSERT into database AFTER both messages are successfully posted
+        await pool.query(
+            `INSERT INTO bets 
+            (id, user_id, username, bet_description, sport, risk, odds, payout, result, timestamp, message_id, channel_id, tracker_message_id)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending',$9,$10,$11,$12)`,
+            [id, userId, username, description, sport, risk, odds, payout, timestamp, sent.id, sent.channel.id, trackerMessageId || null]
+        );
 
         return interaction.editReply({
             content: '✅ Bet posted successfully!'
@@ -158,6 +144,32 @@ async function handlePostCommand(interaction) {
 
     } catch (err) {
         console.error('Error posting bet:', err);
+        
+        // Send DM to admin about the failure
+        try {
+            const adminId = process.env.ADMIN_OVERRIDE_ID;
+            if (adminId) {
+                const admin = await interaction.client.users.fetch(adminId).catch(() => null);
+                if (admin) {
+                    const { EmbedBuilder } = require('discord.js');
+                    const embed = new EmbedBuilder()
+                        .setTitle('❌ Bet Posting Failed')
+                        .setColor(0xFF0000)
+                        .addFields(
+                            { name: 'User', value: `${interaction.user} (${interaction.user.id})`, inline: false },
+                            { name: 'Bet Description', value: description, inline: false },
+                            { name: 'Details', value: `Sport: ${sport}\nRisk: ${risk}u\nOdds: ${odds}`, inline: false },
+                            { name: 'Error', value: `\`\`\`${err.message}\`\`\``, inline: false }
+                        )
+                        .setTimestamp();
+                    
+                    await admin.send({ embeds: [embed] }).catch(() => {});
+                }
+            }
+        } catch (dmErr) {
+            console.error('Failed to send error DM:', dmErr);
+        }
+        
         return interaction.editReply({
             content: 'Error saving your bet.'
         });
