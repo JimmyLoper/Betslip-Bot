@@ -50,7 +50,6 @@ if (fs.existsSync(interactionsPath)) {
             for (const id of handler.customIds) {
                 client.interactions.set(id, handler);
             }
-            console.log(`Loaded handler ${file} with customIds:`, handler.customIds);
         }
     }
 }
@@ -271,19 +270,17 @@ client.on('messageCreate', async message => {
 function findInteractionHandler(customId) {
     // Exact match first
     if (client.interactions.has(customId)) {
-        console.log(`Found exact match for customId: ${customId}`);
         return client.interactions.get(customId);
     }
 
     // Prefix match (for ladder_step_modal_1_5, etc.)
     for (const [id, handler] of client.interactions.entries()) {
         if (customId.startsWith(id)) {
-            console.log(`Found prefix match for customId: ${customId} using prefix: ${id}`);
             return handler;
         }
     }
 
-    console.log(`NO HANDLER FOUND for customId: ${customId}`);
+    console.warn(`No handler found for customId: ${customId}`);
     return null;
 }
 

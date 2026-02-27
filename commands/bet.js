@@ -5,21 +5,49 @@ const {
     ActionRowBuilder,
     ButtonBuilder,
     ButtonStyle,
+    EmbedBuilder,
     StringSelectMenuBuilder,
     ModalBuilder,
     TextInputBuilder,
     TextInputStyle
 } = require('discord.js');
-const { channel } = require('diagnostics_channel');
+const { buildParsingPrompt } = require('../utils/sbParsers');
+const { parseDescriptionInput } = require('../utils/parseDescription');
+const { mapUnitsToBets } = require('../utils/mapUnits');
+const { pendingScans } = require('../utils/pendingScans');
 
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('bet')
         .setDescription('Bet commands')
+
+        // AI-powered scan subcommand
         .addSubcommand(sub =>
             sub
                 .setName('post')
-                .setDescription('Post a new bet')
+                .setDescription('Scan a betslip screenshot with AI and auto-create bet entries')
+                .addStringOption(opt =>
+                    opt.setName('description')
+                        .setDescription('Unit size(s) and optional note e.g. "Kam 1u 0.25u 0.15u" or "1 unit"')
+                        .setRequired(true)
+                )
+                .addAttachmentOption(opt =>
+                    opt.setName('screenshot')
+                        .setDescription('Betslip screenshot')
+                        .setRequired(true)
+                )
+                .addStringOption(opt =>
+                    opt.setName('link')
+                        .setDescription('Optional: Link to add to the bet')
+                        .setRequired(false)
+                )
+        )
+
+        // Manual entry subcommand (original post logic)
+        .addSubcommand(sub =>
+            sub
+                .setName('manual')
+                .setDescription('Manually enter a bet with all details')
                 .addStringOption(opt =>
                     opt.setName('description')
                         .setDescription('Bet description')
@@ -53,7 +81,9 @@ module.exports = {
         ),
 
     async execute(interaction) {
-        return handlePostCommand(interaction);
+        const sub = interaction.options.getSubcommand();
+        if (sub === 'post') return handleScanCommand(interaction);
+        if (sub === 'manual') return handlePostCommand(interaction);
     }
 };
 
@@ -100,10 +130,10 @@ async function handlePostCommand(interaction) {
         // Build message for the channel
         let message = '';
         if (notifyRoleId) {
-            message += `<@&${notifyRoleId}>\n`;
+            message += `<@&${notifyRoleId}>\n\n`;
         }
         message += `**${description}**\n`;
-        message += `Risk: **${risk}u**\n`;
+        message += `Risk: **${risk}u**\n\n`;
 
         // Build components
         const components = [];
@@ -247,3 +277,201 @@ async function postBetToTrackerChannel(client, userId, betId, description, risk,
         console.error('Error posting to tracker channel:', err);
     }
 }
+
+// ============================================================
+// SCAN COMMAND - AI-POWERED BETSLIP PARSING
+// ============================================================
+async function handleScanCommand(interaction) {
+    await interaction.deferReply({ ephemeral: true });
+
+    const userId = interaction.user.id;
+    const username = interaction.user.username;
+    const descriptionText = interaction.options.getString('description');
+    const screenshotAttachment = interaction.options.getAttachment('screenshot');
+    const link = interaction.options.getString('link');
+
+    // ── 1. Fetch & base64 encode the screenshot ─────────────────
+    let imageBase64;
+    let imageMediaType = 'image/jpeg';
+    try {
+        const https = require('https');
+        const http = require('http');
+        const { URL } = require('url');
+
+        const fetchBuffer = (url) => new Promise((resolve, reject) => {
+            const parsedUrl = new URL(url);
+            const lib = parsedUrl.protocol === 'https:' ? https : http;
+            const req = lib.get(url, (res) => {
+                const chunks = [];
+                res.on('data', chunk => chunks.push(chunk));
+                res.on('end', () => resolve({ buffer: Buffer.concat(chunks), contentType: res.headers['content-type'] || 'image/jpeg' }));
+                res.on('error', reject);
+            }).on('error', reject);
+            req.setTimeout(15000, () => {
+                req.destroy(new Error('Screenshot fetch timed out after 15s'));
+            });
+        });
+
+        const { buffer, contentType } = await fetchBuffer(screenshotAttachment.url);
+        imageBase64 = buffer.toString('base64');
+        if (contentType.includes('png')) imageMediaType = 'image/png';
+        else if (contentType.includes('gif')) imageMediaType = 'image/gif';
+        else if (contentType.includes('webp')) imageMediaType = 'image/webp';
+        else imageMediaType = 'image/jpeg';
+    } catch (fetchErr) {
+        console.error('Failed to fetch screenshot:', fetchErr);
+        return interaction.editReply({ content: '⚠️ Could not load the screenshot. Please try again.' });
+    }
+
+    // ── 2. Call Claude API ───────────────────────────────────────
+    let parsedBets;
+    try {
+        const Anthropic = require('@anthropic-ai/sdk');
+        const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, timeout: 30000 });
+
+        const prompt = `You are a sports betting assistant analyzing a betslip screenshot. Follow these two steps exactly:
+
+STEP 1 — CLASSIFY THE SCREENSHOT:
+Look at the screenshot and determine the bet type using ONLY these rules:
+- If you see a single header (e.g. "2 leg parlay", "Same Game Parlay", "SGP") with ONE combined odds value at the top and multiple legs listed beneath it connected by dots or inside one card = this is ONE single bet, classify as "single"
+- If you see multiple completely separate bet blocks each with their own header and their own final odds value, and they show the same player/prop with escalating thresholds = classify as "ladder"
+
+STEP 2 — PARSE BASED ON CLASSIFICATION:
+If classified as "single":
+- Return exactly ONE bet object in the array
+- Use ONLY the top-level combined odds (the largest/final odds shown in the header area)
+- Never use individual leg odds
+- description = combined summary of all legs
+- sport = infer from context (e.g. "NBA", "NFL", "MLB", "NHL", "CBB", "CFB", "Soccer")
+- betType = "SGP", "parlay", "moneyline", "spread", "total", "prop", "future", or "teaser"
+- odds = integer in American format (e.g. -110, 150)
+
+If classified as "ladder":
+- Return one bet object per separate bet block
+- Each gets its own odds from its own block header
+- Return in visual order top to bottom
+- Same fields as above for each bet
+
+Each bet object must have exactly: "description" (string), "odds" (number), "sport" (string), "betType" (string)
+
+Return ONLY a valid JSON array. No markdown, no explanation, no backticks, no code fences. Start with [ and end with ].`;
+
+        const response = await anthropic.messages.create({
+            model: 'claude-sonnet-4-6',
+            max_tokens: 1000,
+            messages: [
+                {
+                    role: 'user',
+                    content: [
+                        {
+                            type: 'image',
+                            source: {
+                                type: 'base64',
+                                media_type: imageMediaType,
+                                data: imageBase64
+                            }
+                        },
+                        {
+                            type: 'text',
+                            text: prompt
+                        }
+                    ]
+                }
+            ]
+        });
+
+        const rawText = response.content[0].text.trim();
+        parsedBets = JSON.parse(rawText);
+
+        if (!Array.isArray(parsedBets) || parsedBets.length === 0) {
+            throw new Error('Empty or non-array response from Claude');
+        }
+    } catch (claudeErr) {
+        console.error('Claude parse error:', claudeErr);
+        return interaction.editReply({ content: '⚠️ Could not parse the screenshot. Please try `/bet manual` instead.' });
+    }
+
+    // ── 3. Parse description for units + note ───────────────────
+    const { units, note } = parseDescriptionInput(descriptionText);
+
+    if (units.length === 0) {
+        return interaction.editReply({ content: '⚠️ Could not find any unit sizes in your description. Include values like `1u`, `0.5u`, etc.' });
+    }
+
+    // ── 4. Map units to bets ─────────────────────────────────────
+    const mappedBets = mapUnitsToBets(units, parsedBets);
+
+    // ── 5. Fetch notify role for preview ─────────────────────────
+    const { rows: capperRows } = await pool.query(
+        `SELECT notify_role_id FROM capper_info WHERE channel_id = $1`,
+        [interaction.channel.id]
+    );
+    const notifyRoleId = capperRows[0]?.notify_role_id || null;
+
+    // ── 6. Build preview embed ───────────────────────────────────
+    const previewLines = mappedBets.map((bet, i) =>
+        `**${i + 1}.** ${bet.description} | \`${bet.odds > 0 ? '+' : ''}${bet.odds}\` | **${bet.risk}u**`
+    );
+
+    if (note) previewLines.unshift(`**${note}**\n`);
+
+    const previewEmbed = new EmbedBuilder()
+        .setTitle('🔍 Betslip Preview — Confirm to Post')
+        .setColor(0xF39C12)
+        .setDescription(previewLines.join('\n'))
+        .setFooter({ text: 'This preview expires in 5 minutes' })
+        .setTimestamp();
+
+    const previewComponents = [];
+
+    if (link) {
+        previewComponents.push(
+            new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setLabel('Link')
+                    .setStyle(ButtonStyle.Link)
+                    .setURL(link)
+                    .setEmoji('🔗')
+            )
+        );
+    }
+
+    previewComponents.push(
+        new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId(`scan_confirm_${interaction.id}`)
+                .setLabel('Looks Good ✅')
+                .setStyle(ButtonStyle.Success),
+            new ButtonBuilder()
+                .setCustomId(`scan_cancel_${interaction.id}`)
+                .setLabel('Cancel ❌')
+                .setStyle(ButtonStyle.Danger)
+        )
+    );
+
+    // ── 7. Store pending scan with 5-min TTL ─────────────────────
+    const ttl = setTimeout(() => {
+        pendingScans.delete(interaction.id);
+    }, 5 * 60 * 1000);
+
+    pendingScans.set(interaction.id, {
+        bets: mappedBets,
+        screenshotUrl: screenshotAttachment.url,
+        link,
+        userId,
+        username,
+        channelId: interaction.channel.id,
+        note,
+        notifyRoleId,
+        ttl
+    });
+
+    return interaction.editReply({
+        embeds: [previewEmbed],
+        files: [screenshotAttachment.url],
+        components: previewComponents
+    });
+}
+
+// Exported so scan-confirm interaction can use it
+module.exports.postBetToTrackerChannel = postBetToTrackerChannel;
