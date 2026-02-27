@@ -351,6 +351,15 @@ If classified as "ladder":
 
 Each bet object must have exactly: "description" (string), "odds" (number), "sport" (string), "betType" (string)
 
+Description formatting rules:
+- Players: last name only (e.g. "Johnson" not "Cam Johnson", "Dort" not "Luguentz Dort")
+- Teams: last word of team name only (e.g. "Panthers" not "Florida Panthers", "Knights" not "Vegas Golden Knights")
+- Shorten stat descriptions naturally (e.g. "4+ Threes", "10+ Pts", "1+ TD", "Over 224.5")
+- Remove all matchup context, game location, and game time
+- For parlays and SGPs: combine all legs on one line separated by " + " (e.g. "Johnson 25+ Pts + Dort 1+ Threes")
+- If a single bet or parlay spans multiple different sports, set sport to "Multisport"
+- One clean concise line per bet
+
 Return ONLY a valid JSON array. No markdown, no explanation, no backticks, no code fences. Start with [ and end with ].`;
 
         const response = await anthropic.messages.create({
