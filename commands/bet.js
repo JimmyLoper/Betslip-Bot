@@ -301,15 +301,12 @@ async function handleScanCommand(interaction) {
         const fetchBuffer = (url) => new Promise((resolve, reject) => {
             const parsedUrl = new URL(url);
             const lib = parsedUrl.protocol === 'https:' ? https : http;
-            const req = lib.get(url, (res) => {
+            lib.get(url, (res) => {
                 const chunks = [];
                 res.on('data', chunk => chunks.push(chunk));
                 res.on('end', () => resolve({ buffer: Buffer.concat(chunks), contentType: res.headers['content-type'] || 'image/jpeg' }));
                 res.on('error', reject);
             }).on('error', reject);
-            req.setTimeout(15000, () => {
-                req.destroy(new Error('Screenshot fetch timed out after 15s'));
-            });
         });
 
         const { buffer, contentType } = await fetchBuffer(screenshotAttachment.url);
@@ -356,36 +353,29 @@ Each bet object must have exactly: "description" (string), "odds" (number), "spo
 
 Return ONLY a valid JSON array. No markdown, no explanation, no backticks, no code fences. Start with [ and end with ].`;
 
-        const timeoutPromise = new Promise((_, reject) =>
-            setTimeout(() => reject(new Error('Claude API call timed out after 30s')), 30000)
-        );
-
-        const response = await Promise.race([
-            anthropic.messages.create({
-                model: 'claude-sonnet-4-6',
-                max_tokens: 1000,
-                messages: [
-                    {
-                        role: 'user',
-                        content: [
-                            {
-                                type: 'image',
-                                source: {
-                                    type: 'base64',
-                                    media_type: imageMediaType,
-                                    data: imageBase64
-                                }
-                            },
-                            {
-                                type: 'text',
-                                text: prompt
+        const response = await anthropic.messages.create({
+            model: 'claude-sonnet-4-6',
+            max_tokens: 1000,
+            messages: [
+                {
+                    role: 'user',
+                    content: [
+                        {
+                            type: 'image',
+                            source: {
+                                type: 'base64',
+                                media_type: imageMediaType,
+                                data: imageBase64
                             }
-                        ]
-                    }
-                ]
-            }),
-            timeoutPromise
-        ]);
+                        },
+                        {
+                            type: 'text',
+                            text: prompt
+                        }
+                    ]
+                }
+            ]
+        });
 
         const rawText = response.content[0].text.trim();
         parsedBets = JSON.parse(rawText);
@@ -394,12 +384,8 @@ Return ONLY a valid JSON array. No markdown, no explanation, no backticks, no co
             throw new Error('Empty or non-array response from Claude');
         }
     } catch (claudeErr) {
-        console.error('Claude parse error:', claudeErr.message || claudeErr);
-        const isTimeout = claudeErr.message?.includes('timed out');
-        return interaction.editReply({ content: isTimeout
-            ? '⚠️ The AI took too long to respond. Please try again or use `/bet manual`.'
-            : '⚠️ Could not parse the screenshot. Please try `/bet manual` instead.'
-        });
+        console.error('Claude parse error:', claudeErr);
+        return interaction.editReply({ content: '⚠️ Could not parse the screenshot. Please try `/bet manual` instead.' });
     }
 
     // ── 3. Parse description for units + note ───────────────────
