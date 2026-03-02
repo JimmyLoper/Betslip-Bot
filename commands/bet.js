@@ -11,7 +11,7 @@ const {
     TextInputBuilder,
     TextInputStyle
 } = require('discord.js');
-const { buildParsingPrompt } = require('../utils/sbParsers');
+const { buildSystemPrompt } = require('../utils/sbParsers');
 const { parseDescriptionInput } = require('../utils/parseDescription');
 const { mapUnitsToBets } = require('../utils/mapUnits');
 const { pendingScans } = require('../utils/pendingScans');
@@ -326,45 +326,10 @@ async function handleScanCommand(interaction) {
         const Anthropic = require('@anthropic-ai/sdk');
         const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
-        const prompt = `You are a sports betting assistant analyzing a betslip screenshot. Follow these two steps exactly:
-
-STEP 1 — CLASSIFY THE SCREENSHOT:
-Look at the screenshot and determine the bet type using ONLY these rules:
-- If you see a single header (e.g. "2 leg parlay", "Same Game Parlay", "SGP") with ONE combined odds value at the top and multiple legs listed beneath it connected by dots or inside one card = this is ONE single bet, classify as "single"
-- If you see multiple completely separate bet blocks each with their own header and their own final odds value, and they show the same player/prop with escalating thresholds = classify as "ladder"
-
-STEP 2 — PARSE BASED ON CLASSIFICATION:
-If classified as "single":
-- Return exactly ONE bet object in the array
-- Use ONLY the top-level combined odds (the largest/final odds shown in the header area)
-- Never use individual leg odds
-- description = combined summary of all legs
-- sport = infer from context (e.g. "NBA", "NFL", "MLB", "NHL", "CBB", "CFB", "Soccer")
-- betType = "SGP", "parlay", "moneyline", "spread", "total", "prop", "future", or "teaser"
-- odds = integer in American format (e.g. -110, 150)
-
-If classified as "ladder":
-- Return one bet object per separate bet block
-- Each gets its own odds from its own block header
-- Return in visual order top to bottom
-- Same fields as above for each bet
-
-Each bet object must have exactly: "description" (string), "odds" (number), "sport" (string), "betType" (string)
-
-Description formatting rules:
-- Players: last name only (e.g. "Johnson" not "Cam Johnson", "Dort" not "Luguentz Dort")
-- Teams: last word of team name only (e.g. "Panthers" not "Florida Panthers", "Knights" not "Vegas Golden Knights")
-- Shorten stat descriptions naturally (e.g. "4+ Threes", "10+ Pts", "1+ TD", "Over 224.5")
-- Remove all matchup context, game location, and game time
-- For parlays and SGPs: combine all legs on one line separated by " + " (e.g. "Johnson 25+ Pts + Dort 1+ Threes")
-- If a single bet or parlay spans multiple different sports, set sport to "Multisport"
-- One clean concise line per bet
-
-Return ONLY a valid JSON array. No markdown, no explanation, no backticks, no code fences. Start with [ and end with ].`;
-
         const response = await anthropic.messages.create({
             model: 'claude-sonnet-4-6',
             max_tokens: 1000,
+            system: buildSystemPrompt(),
             messages: [
                 {
                     role: 'user',
@@ -379,7 +344,7 @@ Return ONLY a valid JSON array. No markdown, no explanation, no backticks, no co
                         },
                         {
                             type: 'text',
-                            text: prompt
+                            text: 'Parse this betslip screenshot and return only a JSON array.'
                         }
                     ]
                 }

@@ -1,13 +1,15 @@
 // SPORTSBOOK PARSERS
-// To add a new sportsbook: add a new case in the switch statement inside buildParsingPrompt()
+// To add a new sportsbook: add a new case in the switch statement inside buildSystemPrompt()
 // with specific instructions for how that sportsbook displays odds, descriptions, and bet layout
 
 /**
- * Builds a Claude prompt for parsing a betslip screenshot.
+ * Builds the Claude system prompt for parsing a betslip screenshot.
+ * Contains all parsing rules, classification logic, sportsbook-specific instructions,
+ * and description formatting rules.
  * @param {string|null} hint - Optional detected sportsbook name (e.g. 'fanduel', 'draftkings')
- * @returns {string} - The full prompt to send to Claude
+ * @returns {string} - The full system prompt string
  */
-function buildParsingPrompt(hint) {
+function buildSystemPrompt(hint) {
     const normalizedHint = hint ? hint.toLowerCase().replace(/\s/g, '') : null;
 
     let sbInstructions = '';
@@ -37,12 +39,32 @@ For both styles: return exactly ONE bet object for the entire slip, not one per 
 
         case 'draftkings':
             sbInstructions = `
-SPORTSBOOK: DraftKings
+SPORTSBOOK: DraftKings — three possible bet styles:
+
+Style 1 - Standard DraftKings (no SGPx badge):
 - Clean dark UI with no SGP badge
 - Each bet block shows player name bold at the top, prop description below it
 - Matchup and game time appear at the bottom of each block
 - Odds appear in the top right of each block
-- Ladder-style bets show the same player with escalating thresholds as separate individual blocks — treat each as its own separate bet`;
+- Ladder-style bets show the same player with escalating thresholds as separate individual blocks — treat each as its own separate bet
+
+Style 2 - DraftKings SGPx (cross-game parlay):
+- Identified by a green "SGPx" badge in the top left of the screenshot
+- A header showing "X Pick Parlay | combined odds" = this is ONE single bet — use the header combined odds
+- Sub-blocks labeled "2 Pick SGP | odds" are individual legs within the parlay — their odds are leg odds only, IGNORE them
+- Each sub-block contains individual prop legs and a game matchup pill showing team abbreviations
+- Description = all individual prop legs combined across all sub-blocks joined with " + " using last name and shortened stat format
+- betType = "SGPx"
+- Never create separate bet objects for SGPx — always return exactly ONE bet object regardless of how many sub-blocks appear
+
+Style 3 - DraftKings ladder (single prop with escalating thresholds):
+- Multiple separate bet blocks each with their own odds and a yellow "Open" badge top right
+- Same player and prop type repeated with ascending thresholds (e.g. 2+, 3+, 4+)
+- Same game matchup pill shown on each block
+- No parlay header present
+- Each block = its own separate bet object
+- Description = last name + threshold + shortened stat (e.g. "George 2+ Threes")
+- This is the opposite of SGPx — always multiple bet objects, never one`;
             break;
 
         case 'fanatics':
@@ -63,14 +85,35 @@ SPORTSBOOK: Unknown — apply general rules:
             break;
     }
 
-    return `You are a sports betting assistant. Analyze this betslip screenshot and extract all the individual bets shown.
+    return `You are a sports betting assistant. Analyze betslip screenshots and extract bets by following these steps exactly.
+
+STEP 1 — CLASSIFY THE SCREENSHOT:
+Look at the screenshot and determine the bet type using ONLY these rules:
+- If you see a single header (e.g. "2 leg parlay", "Same Game Parlay", "SGP") with ONE combined odds value at the top and multiple legs listed beneath it connected by dots or inside one card = this is ONE single bet, classify as "single"
+- If you see multiple completely separate bet blocks each with their own header and their own final odds value, and they show the same player/prop with escalating thresholds = classify as "ladder"
 ${sbInstructions}
 
-Return a JSON array of bet objects. Each object must have exactly these fields:
+STEP 2 — PARSE BASED ON CLASSIFICATION:
+If classified as "single":
+- Return exactly ONE bet object in the array
+- Use ONLY the top-level combined odds (the largest/final odds shown in the header area)
+- Never use individual leg odds
+- description = combined summary of all legs
+- sport = infer from context (e.g. "NBA", "NFL", "MLB", "NHL", "CBB", "CFB", "Soccer")
+- betType = "SGP", "SGPx", "parlay", "moneyline", "spread", "total", "prop", "future", or "teaser"
+- odds = integer in American format (e.g. -110, 150)
+
+If classified as "ladder":
+- Return one bet object per separate bet block
+- Each gets its own odds from its own block header
+- Return in visual order top to bottom
+- Same fields as above for each bet
+
+Each bet object must have exactly these fields:
 - "description": string — short concise bet description following the formatting rules below
 - "odds": number — American format odds as an integer (e.g. -110, 150, -350)
-- "sport": string — the sport (e.g. "NBA", "NFL", "MLB", "NHL", "CBB", "CFB", "Soccer") — infer from context if not explicitly shown; if a single bet or parlay spans multiple different sports, use "Multisport"
-- "betType": string — one of: "SGP", "prop", "spread", "moneyline", "total", "parlay", "teaser", "future"
+- "sport": string — the sport (e.g. "NBA", "NFL", "MLB", "NHL", "CBB", "CFB", "Soccer") — infer from context if not explicitly shown
+- "betType": string — one of: "SGP", "SGPx", "prop", "spread", "moneyline", "total", "parlay", "teaser", "future"
 
 Description formatting rules:
 - Players: last name only (e.g. "Johnson" not "Cam Johnson", "Dort" not "Luguentz Dort")
@@ -78,14 +121,14 @@ Description formatting rules:
 - Shorten stat descriptions naturally (e.g. "4+ Threes", "10+ Pts", "1+ TD", "Over 224.5")
 - Remove all matchup context, game location, and game time
 - For parlays and SGPs: combine all legs on one line separated by " + " (e.g. "Johnson 25+ Pts + Dort 1+ Threes")
+- If a single bet or parlay spans multiple different sports, set sport to "Multisport"
 - One clean concise line per bet
 
-General rules:
+Output rules:
 - Return bets in visual order top to bottom as they appear in the screenshot
 - If a bet has no readable odds, skip it
-- Do NOT include the overall parlay odds — only extract individual bet legs or standalone bets
-- Return ONLY valid JSON — no markdown, no explanation, no backticks, no code fences
+- Return ONLY a valid JSON array — no markdown, no explanation, no backticks, no code fences
 - The response must start with [ and end with ]`;
 }
 
-module.exports = { buildParsingPrompt };
+module.exports = { buildSystemPrompt };
