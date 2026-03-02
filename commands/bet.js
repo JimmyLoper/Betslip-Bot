@@ -14,7 +14,7 @@ const {
 const { buildSystemPrompt } = require('../utils/sbParsers');
 const { parseDescriptionInput } = require('../utils/parseDescription');
 const { mapUnitsToBets } = require('../utils/mapUnits');
-const { pendingScans } = require('../utils/pendingScans');
+const { calculatePayout } = require('../utils/calcPayout');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -359,6 +359,31 @@ async function handleScanCommand(interaction) {
         }
     } catch (claudeErr) {
         console.error('Claude parse error:', claudeErr);
+
+        // DM admin with screenshot so they can learn from the failure
+        try {
+            const adminId = process.env.ADMIN_OVERRIDE_ID;
+            if (adminId) {
+                const admin = await interaction.client.users.fetch(adminId).catch(() => null);
+                if (admin) {
+                    const { EmbedBuilder } = require('discord.js');
+                    const rawOutput = claudeErr?.message || 'Unknown error';
+                    const embed = new EmbedBuilder()
+                        .setTitle('⚠️ AI Parse Failed')
+                        .setColor(0xF39C12)
+                        .addFields(
+                            { name: 'User', value: `<@${userId}> (${userId})`, inline: false },
+                            { name: 'Description Input', value: descriptionText, inline: false },
+                            { name: 'Error', value: `\`\`\`${rawOutput}\`\`\``, inline: false }
+                        )
+                        .setTimestamp();
+                    await admin.send({ embeds: [embed], files: [screenshotAttachment.url] }).catch(() => {});
+                }
+            }
+        } catch (dmErr) {
+            console.error('Failed to send parse error DM:', dmErr);
+        }
+
         return interaction.editReply({ content: '⚠️ Could not parse the screenshot. Please try `/bet manual` instead.' });
     }
 
@@ -372,76 +397,99 @@ async function handleScanCommand(interaction) {
     // ── 4. Map units to bets ─────────────────────────────────────
     const mappedBets = mapUnitsToBets(units, parsedBets);
 
-    // ── 5. Fetch notify role for preview ─────────────────────────
+    // ── 5. Fetch notify role ──────────────────────────────────────
     const { rows: capperRows } = await pool.query(
         `SELECT notify_role_id FROM capper_info WHERE channel_id = $1`,
         [interaction.channel.id]
     );
     const notifyRoleId = capperRows[0]?.notify_role_id || null;
 
-    // ── 6. Build preview embed ───────────────────────────────────
-    const previewLines = mappedBets.map((bet, i) =>
-        `**${i + 1}.** ${bet.description} | \`${bet.odds > 0 ? '+' : ''}${bet.odds}\` | **${bet.risk}u**`
-    );
+    const timestamp = Date.now();
 
-    if (note) previewLines.unshift(`**${note}**\n`);
+    try {
+        // ── 6. Build and send public channel message ─────────────────
+        let publicMessage = '';
+        if (notifyRoleId) publicMessage += `<@&${notifyRoleId}>\n\n`;
+        if (note) publicMessage += `**${note}**\n`;
+        mappedBets.forEach(bet => {
+            publicMessage += `${bet.risk}u\n`;
+        });
+        publicMessage += '\n';
 
-    const previewEmbed = new EmbedBuilder()
-        .setTitle('🔍 Betslip Preview — Confirm to Post')
-        .setColor(0xF39C12)
-        .setDescription(previewLines.join('\n'))
-        .setFooter({ text: 'This preview expires in 5 minutes' })
-        .setTimestamp();
+        const publicComponents = [];
+        if (link) {
+            publicComponents.push(
+                new ActionRowBuilder().addComponents(
+                    new ButtonBuilder()
+                        .setLabel('Link')
+                        .setStyle(ButtonStyle.Link)
+                        .setURL(link)
+                        .setEmoji('🔗')
+                )
+            );
+        }
 
-    const previewComponents = [];
+        const sent = await interaction.channel.send({
+            content: publicMessage,
+            files: screenshotAttachment.url ? [screenshotAttachment.url] : [],
+            components: publicComponents,
+            allowedMentions: notifyRoleId ? { roles: [notifyRoleId] } : undefined
+        });
 
-    if (link) {
-        previewComponents.push(
-            new ActionRowBuilder().addComponents(
-                new ButtonBuilder()
-                    .setLabel('Link')
-                    .setStyle(ButtonStyle.Link)
-                    .setURL(link)
-                    .setEmoji('🔗')
-            )
-        );
+        // ── 7. Post each bet to tracker + insert into DB ─────────────
+        for (const bet of mappedBets) {
+            const betId = randomUUID();
+            const payout = calculatePayout(bet.risk, bet.odds);
+
+            const trackerMessageId = await postBetToTrackerChannel(
+                interaction.client,
+                userId,
+                betId,
+                bet.description,
+                bet.risk,
+                bet.sport,
+                bet.odds,
+                screenshotAttachment.url,
+                link
+            );
+
+            await pool.query(
+                `INSERT INTO bets
+                (id, user_id, username, bet_description, sport, risk, odds, payout, result, timestamp, message_id, channel_id, tracker_message_id)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending',$9,$10,$11,$12)`,
+                [betId, userId, username, bet.description, bet.sport, bet.risk, bet.odds, payout, timestamp, sent.id, sent.channel.id, trackerMessageId || null]
+            );
+        }
+
+        return interaction.editReply({ content: `✅ ${mappedBets.length > 1 ? `${mappedBets.length} bets` : 'Bet'} posted successfully!` });
+
+    } catch (err) {
+        console.error('Error posting scan bets:', err);
+
+        // DM admin on failure
+        try {
+            const adminId = process.env.ADMIN_OVERRIDE_ID;
+            if (adminId) {
+                const admin = await interaction.client.users.fetch(adminId).catch(() => null);
+                if (admin) {
+                    const embed = new EmbedBuilder()
+                        .setTitle('❌ Scan Bet Post Failed')
+                        .setColor(0xFF0000)
+                        .addFields(
+                            { name: 'User', value: `<@${userId}> (${userId})`, inline: false },
+                            { name: 'Bets', value: mappedBets.map(b => `${b.description} | ${b.odds} | ${b.risk}u`).join('\n'), inline: false },
+                            { name: 'Error', value: `\`\`\`${err.message}\`\`\``, inline: false }
+                        )
+                        .setTimestamp();
+                    await admin.send({ embeds: [embed], files: [screenshotAttachment.url] }).catch(() => {});
+                }
+            }
+        } catch (dmErr) {
+            console.error('Failed to send error DM:', dmErr);
+        }
+
+        return interaction.editReply({ content: '❌ Error posting bets. Please try `/bet manual` instead.' });
     }
-
-    previewComponents.push(
-        new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId(`scan_confirm_${interaction.id}`)
-                .setLabel('Looks Good ✅')
-                .setStyle(ButtonStyle.Success),
-            new ButtonBuilder()
-                .setCustomId(`scan_cancel_${interaction.id}`)
-                .setLabel('Cancel ❌')
-                .setStyle(ButtonStyle.Danger)
-        )
-    );
-
-    // ── 7. Store pending scan with 5-min TTL ─────────────────────
-    const ttl = setTimeout(() => {
-        pendingScans.delete(interaction.id);
-    }, 5 * 60 * 1000);
-
-    pendingScans.set(interaction.id, {
-        bets: mappedBets,
-        screenshotUrl: screenshotAttachment.url,
-        link,
-        userId,
-        username,
-        channelId: interaction.channel.id,
-        note,
-        notifyRoleId,
-        ttl
-    });
-
-    return interaction.editReply({
-        embeds: [previewEmbed],
-        files: [screenshotAttachment.url],
-        components: previewComponents
-    });
 }
 
 // Exported so scan-confirm interaction can use it
