@@ -15,6 +15,7 @@ const { buildSystemPrompt } = require('../utils/sbParsers');
 const { parseDescriptionInput } = require('../utils/parseDescription');
 const { mapUnitsToBets } = require('../utils/mapUnits');
 const { calculatePayout } = require('../utils/calcPayout');
+const { pendingOdds } = require('../utils/pendingOdds');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -397,12 +398,13 @@ async function handleScanCommand(interaction) {
     // ── 4. Map units to bets ─────────────────────────────────────
     const mappedBets = mapUnitsToBets(units, parsedBets);
 
-    // ── 5. Fetch notify role ──────────────────────────────────────
+    // ── 5. Fetch notify role + tracker channel ───────────────────
     const { rows: capperRows } = await pool.query(
-        `SELECT notify_role_id FROM capper_info WHERE channel_id = $1`,
+        `SELECT notify_role_id, tracker_channel_id FROM capper_info WHERE channel_id = $1`,
         [interaction.channel.id]
     );
     const notifyRoleId = capperRows[0]?.notify_role_id || null;
+    const trackerChannelId = capperRows[0]?.tracker_channel_id || null;
 
     const timestamp = Date.now();
 
@@ -437,6 +439,8 @@ async function handleScanCommand(interaction) {
         });
 
         // ── 7. Post each bet to tracker + insert into DB ─────────────
+        const zeroOddsBets = [];
+
         for (const bet of mappedBets) {
             const betId = randomUUID();
             const payout = calculatePayout(bet.risk, bet.odds);
@@ -459,6 +463,28 @@ async function handleScanCommand(interaction) {
                 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending',$9,$10,$11,$12)`,
                 [betId, userId, username, bet.description, bet.sport, bet.risk, bet.odds, payout, timestamp, sent.id, sent.channel.id, trackerMessageId || null]
             );
+
+            if (bet.odds === 0) {
+                zeroOddsBets.push({ betId, trackerMessageId, description: bet.description, risk: bet.risk, sport: bet.sport, screenshotUrl: screenshotAttachment.url, link });
+            }
+        }
+
+        // ── 8. Prompt for odds if any bets had no readable odds ───────
+        if (zeroOddsBets.length > 0 && trackerChannelId) {
+            const ttl = setTimeout(() => pendingOdds.delete(interaction.id), 10 * 60 * 1000);
+            pendingOdds.set(interaction.id, { bets: zeroOddsBets, trackerChannelId, ttl });
+
+            return interaction.editReply({
+                content: `✅ ${mappedBets.length > 1 ? `${mappedBets.length} bets` : 'Bet'} posted! Odds weren’t found in the screenshot — click below to add them.`,
+                components: [
+                    new ActionRowBuilder().addComponents(
+                        new ButtonBuilder()
+                            .setCustomId(`parlay_odds_btn_${interaction.id}`)
+                            .setLabel('📊 Enter Odds')
+                            .setStyle(ButtonStyle.Primary)
+                    )
+                ]
+            });
         }
 
         return interaction.editReply({ content: `✅ ${mappedBets.length > 1 ? `${mappedBets.length} bets` : 'Bet'} posted successfully!` });

@@ -17,9 +17,9 @@ function buildSystemPrompt(hint) {
     switch (normalizedHint) {
         case 'fanduel':
             sbInstructions = `
-SPORTSBOOK: FanDuel — two possible screenshot styles, both are FanDuel:
+SPORTSBOOK: FanDuel — four possible screenshot styles, all are FanDuel:
 
-Style 1 - Manual screenshot of FanDuel app (dark background):
+Style 1 - Manual screenshot of FanDuel app (dark background, placed bet):
 - A "X leg parlay" or "Same Game Parlay" header with combined odds shown top right = this is ONE single bet
 - Individual legs are expanded below the header showing their own individual odds and matchup info — these are leg odds only, IGNORE them entirely
 - Use ONLY the header combined odds as the bet odds
@@ -34,7 +34,26 @@ Style 2 - FanDuel native share card (blue gradient header):
 - Description = all legs combined into one string
 - This is still FanDuel, not a third-party app — treat it the same way
 
-For both styles: return exactly ONE bet object for the entire slip, not one per leg.`;
+Style 3 - FanDuel parlay betslip (unplaced):
+- Two or more legs connected by a vertical red line on the left side
+- No individual WAGER or TO WIN boxes per leg
+- Each leg shows team/player, bet type, odds, matchup and time
+- No combined odds header visible — set odds to 0
+- This is ONE parlay bet, not separate straights
+- Description = all legs combined with " + "
+- betType = "parlay"
+
+Style 4 - FanDuel separate straights betslip (unplaced):
+- Each bet block has its own individual WAGER and TO WIN dollar input boxes
+- Red minus circle on each block independently
+- No vertical connecting line between blocks
+- Each block = its own separate bet object
+- Description = team/player + bet type + line for each block
+- betType = "spread", "moneyline", or "total" as appropriate
+
+For Styles 1 and 2: return exactly ONE bet object for the entire slip, not one per leg.
+For Style 3: return exactly ONE bet object.
+For Style 4: return one bet object per block.`;
             break;
 
         case 'draftkings':
