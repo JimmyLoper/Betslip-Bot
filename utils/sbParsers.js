@@ -88,12 +88,20 @@ Style 3 - DraftKings ladder (single prop with escalating thresholds):
 
         case 'fanatics':
             sbInstructions = `
-SPORTSBOOK: Fanatics — three possible screenshot styles:
+SPORTSBOOK: Fanatics — four possible screenshot styles:
 
-Style 1 - Fanatics placed bet (settled or active):
-- Odds are displayed in the top right of each bet block
-- Player name and prop description are shown clearly in each block
-- Treat each visible bet block as a separate individual bet
+Style 1a - Fanatics placed single straight (share card):
+- "Fanatics Sportsbook" logo/header visible at top
+- Single bet block showing team/player name + line, bet type below, sport and matchup
+- Odds top right
+- ONE bet object
+
+Style 1b - Fanatics placed parlay (share card):
+- "Fanatics Sportsbook" logo/header visible at top
+- "X Leg Parlay" label with combined odds top right = this is ONE single bet object
+- Team logos shown in a row with bet type labels below each
+- Use the combined odds from the header
+- betType = "parlay"
 
 Style 2 - Fanatics unplaced straights betslip:
 - Trash can icon top left per block
