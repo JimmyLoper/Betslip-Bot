@@ -1,12 +1,13 @@
 /**
  * Parses a capper's description input to extract unit sizes and notes.
  *
- * Handles formats: 1, 1u, 1 u, 1unit, 1 unit, 1units, 1 units, 0.5, 0.25, etc.
+ * Handles formats: 1, 1u, 1 u, 1unit, 1 unit, 1units, 1 units, 0.5, 0.25, .2, .25, etc.
  *
  * Examples:
  *   "Kam 1u 0.25u 0.15u"  → { units: ['1u', '0.25u', '0.15u'], note: 'Kam' }
  *   "1 unit"              → { units: ['1u'], note: '' }
  *   "0.5 units"           → { units: ['0.5u'], note: '' }
+ *   ".2u"                 → { units: ['0.2u'], note: '' }
  *   "2"                   → { units: ['2u'], note: '' }
  *
  * @param {string} descriptionText
@@ -17,9 +18,10 @@ function parseDescriptionInput(descriptionText) {
         return { units: [], note: '' };
     }
 
-    // Regex matches: optional decimal number followed by optional whitespace and unit suffix
+    // Regex matches: number (with or without leading zero before decimal) followed by optional whitespace and unit suffix
     // Captures: (number)(optional whitespace)(u|unit|units)
-    const unitRegex = /(\d+(?:\.\d+)?)\s*(?:units?|u(?![a-z]))/gi;
+    // Handles: 1u, 0.5u, .5u, .25u, 1 unit, 1units, etc.
+    const unitRegex = /(\d*\.?\d+)\s*(?:units?|u(?![a-z]))/gi;
 
     const units = [];
     let remaining = descriptionText;
