@@ -234,6 +234,9 @@ client.on('messageCreate', async message => {
         // Check if bot is mentioned
         if (!message.mentions.has(client.user.id)) return;
 
+        // Ignore @everyone / @here blasts that happen to trigger a mention
+        if (message.mentions.everyone) return;
+
         const adminId = process.env.ADMIN_OVERRIDE_ID;
         if (!adminId) return;
 
