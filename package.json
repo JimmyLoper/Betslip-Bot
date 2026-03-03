@@ -1,6 +1,6 @@
 {
   "name": "capper-helper-bot",
-  "version": "2.2.0",
+  "version": "3.0.0",
   "description": "Helps cappers post plays and track their performance",
   "main": "index.js",
   "scripts": {
