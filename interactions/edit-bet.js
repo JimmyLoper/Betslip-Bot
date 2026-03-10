@@ -38,7 +38,7 @@ async function handleEditBet(interaction) {
 
     // Fetch current bet details
     const { rows } = await db.query(
-        `SELECT bet_description, sport, risk, odds FROM bets WHERE id = $1`,
+        `SELECT bet_description, sport, risk, odds, payout FROM bets WHERE id = $1`,
         [betId]
     );
 
@@ -49,7 +49,7 @@ async function handleEditBet(interaction) {
         });
     }
 
-    const { bet_description, sport, risk, odds } = rows[0];
+    const { bet_description, sport, risk, odds, payout } = rows[0];
 
     // Show modal with current values prefilled
     const modal = new ModalBuilder()
@@ -84,11 +84,19 @@ async function handleEditBet(interaction) {
         .setValue(odds.toString())
         .setRequired(true);
 
+    const payoutInput = new TextInputBuilder()
+        .setCustomId('payout')
+        .setLabel('Payout override (leave blank to auto-calculate)')
+        .setStyle(TextInputStyle.Short)
+        .setValue(payout.toString())
+        .setRequired(false);
+
     modal.addComponents(
         new ActionRowBuilder().addComponents(descInput),
         new ActionRowBuilder().addComponents(sportInput),
         new ActionRowBuilder().addComponents(riskInput),
-        new ActionRowBuilder().addComponents(oddsInput)
+        new ActionRowBuilder().addComponents(oddsInput),
+        new ActionRowBuilder().addComponents(payoutInput)
     );
 
     return interaction.showModal(modal);
@@ -104,9 +112,10 @@ async function handleEditBetModal(interaction) {
     const newSport = interaction.fields.getTextInputValue('sport');
     const newRisk = parseFloat(interaction.fields.getTextInputValue('risk'));
     const newOdds = parseInt(interaction.fields.getTextInputValue('odds'), 10);
+    const payoutOverride = interaction.fields.getTextInputValue('payout').trim();
 
-    // Calculate new payout
-    const payout = calculatePayout(newRisk, newOdds);
+    // Use manual payout if provided, otherwise auto-calculate
+    const payout = payoutOverride !== '' ? parseFloat(payoutOverride) : calculatePayout(newRisk, newOdds);
 
     try {
         // Fetch bet details to get tracker message info and user_id
