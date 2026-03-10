@@ -17,16 +17,6 @@ module.exports = {
 // DELETE BET BUTTON
 // ============================================================
 async function handleDeleteBet(interaction) {
-    const overrideId = process.env.ADMIN_OVERRIDE_ID;
-
-    // Check if user is admin
-    if (interaction.user.id !== overrideId) {
-        return interaction.reply({
-            content: '❌ Only admins can delete bets.',
-            ephemeral: true
-        });
-    }
-
     const parts = interaction.customId.split('_');
     const betId = parts[2];
 
@@ -54,16 +44,6 @@ async function handleDeleteBet(interaction) {
 // DELETE BET CONFIRMATION
 // ============================================================
 async function handleDeleteConfirm(interaction) {
-    const overrideId = process.env.ADMIN_OVERRIDE_ID;
-
-    // Check if user is admin
-    if (interaction.user.id !== overrideId) {
-        return interaction.reply({
-            content: '❌ Only admins can delete bets.',
-            ephemeral: true
-        });
-    }
-
     const parts = interaction.customId.split('_');
     const action = parts[2]; // 'confirm' or 'cancel'
     const betId = parts[3];

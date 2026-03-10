@@ -24,16 +24,6 @@ module.exports = {
 // EDIT BET BUTTON
 // ============================================================
 async function handleEditBet(interaction) {
-    const overrideId = process.env.ADMIN_OVERRIDE_ID;
-
-    // Check if user is admin
-    if (interaction.user.id !== overrideId) {
-        return interaction.reply({
-            content: '❌ Only admins can edit bets.',
-            ephemeral: true
-        });
-    }
-
     const betId = interaction.customId.split('_')[2];
 
     // Fetch current bet details
