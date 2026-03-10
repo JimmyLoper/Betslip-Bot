@@ -222,51 +222,159 @@ client.on('messageCreate', async message => {
 });
 
 // ============================================================
-// BOT MENTION NOTIFICATION
+// BOT MENTION → BET SCAN (or admin notification fallback)
 // ============================================================
 client.on('messageCreate', async message => {
     try {
         if (message.author?.bot) return;
-        
-        // Skip if this is a reply to another message
-        if (message.reference) return;
-        
-        // Check if bot is mentioned
-        if (!message.mentions.has(client.user.id)) return;
 
-        // Ignore @everyone / @here blasts that happen to trigger a mention
+        // Skip replies — only handle direct mentions
+        if (message.reference) return;
+
+        if (!message.mentions.has(client.user.id)) return;
         if (message.mentions.everyone) return;
 
-        const adminId = process.env.ADMIN_OVERRIDE_ID;
-        if (!adminId) return;
-
-        // Check if this channel is a registered bet channel
-        const { rows } = await db.query(
-            `SELECT 1 FROM capper_info WHERE channel_id = $1`,
+        // Only act in registered bet channels
+        const { rows: capperRows } = await db.query(
+            `SELECT notify_role_id, tracker_channel_id FROM capper_info WHERE channel_id = $1`,
             [message.channelId]
         );
 
-        if (rows.length === 0) return; // Channel not registered, ignore
+        if (capperRows.length === 0) return;
 
-        // DM the admin
-        const admin = await client.users.fetch(adminId).catch(() => null);
-        if (!admin) return;
+        const userId = message.author.id;
+        const username = message.author.username;
 
-        const embed = new (require('discord.js').EmbedBuilder)()
-            .setTitle('Bot Mentioned!')
-            .setDescription(`Someone mentioned the bot in ${message.guild?.name || 'DM'}`)
-            .addFields(
-                { name: 'User', value: `${message.author} (${message.author.id})`, inline: false },
-                { name: 'Channel', value: message.channel?.toString() || 'DM', inline: false },
-                { name: 'Message', value: message.content.substring(0, 1024), inline: false }
-            )
-            .setColor(0xFFA500)
-            .setTimestamp()
-            .setFooter({ text: `Message ID: ${message.id}` });
+        // Strip all mentions from content to isolate the description/units text
+        const cleanContent = message.content.replace(/<@!?\d+>/g, '').trim();
 
-        await admin.send({ embeds: [embed] }).catch(err => console.error('Failed to send DM:', err));
+        const { parseDescriptionInput } = require('./utils/parseDescription');
+        const { units, note } = parseDescriptionInput(cleanContent);
+        const attachment = message.attachments.first();
+
+        // ── No units or no screenshot → fall back to admin DM notification ──
+        if (units.length === 0 || !attachment) {
+            const adminId = process.env.ADMIN_OVERRIDE_ID;
+            if (!adminId) return;
+            const admin = await client.users.fetch(adminId).catch(() => null);
+            if (!admin) return;
+
+            const { EmbedBuilder } = require('discord.js');
+            const embed = new EmbedBuilder()
+                .setTitle('Bot Mentioned!')
+                .setDescription(`Someone mentioned the bot in ${message.guild?.name || 'DM'}`)
+                .addFields(
+                    { name: 'User', value: `${message.author} (${message.author.id})`, inline: false },
+                    { name: 'Channel', value: message.channel?.toString() || 'DM', inline: false },
+                    { name: 'Message', value: message.content.substring(0, 1024), inline: false }
+                )
+                .setColor(0xFFA500)
+                .setTimestamp()
+                .setFooter({ text: `Message ID: ${message.id}` });
+
+            await admin.send({ embeds: [embed] }).catch(err => console.error('Failed to send DM:', err));
+            return;
+        }
+
+        // ── BET SCAN FLOW ────────────────────────────────────────────────────
+
+        // 1. Fetch & base64 encode the screenshot
+        let imageBase64, imageMediaType = 'image/jpeg';
+        try {
+            const https = require('https');
+            const http = require('http');
+            const { URL } = require('url');
+
+            const fetchBuffer = (url) => new Promise((resolve, reject) => {
+                const parsedUrl = new URL(url);
+                const lib = parsedUrl.protocol === 'https:' ? https : http;
+                lib.get(url, (res) => {
+                    const chunks = [];
+                    res.on('data', chunk => chunks.push(chunk));
+                    res.on('end', () => resolve({ buffer: Buffer.concat(chunks), contentType: res.headers['content-type'] || 'image/jpeg' }));
+                    res.on('error', reject);
+                }).on('error', reject);
+            });
+
+            const { buffer, contentType } = await fetchBuffer(attachment.url);
+            imageBase64 = buffer.toString('base64');
+            if (contentType.includes('png')) imageMediaType = 'image/png';
+            else if (contentType.includes('gif')) imageMediaType = 'image/gif';
+            else if (contentType.includes('webp')) imageMediaType = 'image/webp';
+            else imageMediaType = 'image/jpeg';
+        } catch (fetchErr) {
+            console.error('Failed to fetch screenshot from mention message:', fetchErr);
+            await message.author.send('⚠️ Could not read your screenshot. Please try `/bet post` instead.').catch(() => {});
+            return;
+        }
+
+        // 2. Call Claude API
+        let parsedBets;
+        try {
+            const Anthropic = require('@anthropic-ai/sdk');
+            const { buildSystemPrompt } = require('./utils/sbParsers');
+            const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+
+            const response = await anthropic.messages.create({
+                model: 'claude-sonnet-4-6',
+                max_tokens: 1000,
+                system: buildSystemPrompt(),
+                messages: [{
+                    role: 'user',
+                    content: [
+                        { type: 'image', source: { type: 'base64', media_type: imageMediaType, data: imageBase64 } },
+                        { type: 'text', text: 'Parse this betslip screenshot and return only a JSON array.' }
+                    ]
+                }]
+            });
+
+            const rawText = response.content[0].text.trim();
+            parsedBets = JSON.parse(rawText);
+            if (!Array.isArray(parsedBets) || parsedBets.length === 0) throw new Error('Empty or non-array response');
+        } catch (claudeErr) {
+            console.error('Claude parse error (mention flow):', claudeErr);
+            await message.author.send('⚠️ Could not parse your betslip. Please try `/bet post` instead.').catch(() => {});
+            return;
+        }
+
+        // 3. Map units to bets
+        const { mapUnitsToBets } = require('./utils/mapUnits');
+        const { calculatePayout } = require('./utils/calcPayout');
+        const { randomUUID } = require('crypto');
+        const { postBetToTrackerChannel } = require('./commands/bet');
+
+        const mappedBets = mapUnitsToBets(units, parsedBets);
+        const timestamp = Date.now();
+
+        // 4. Post each bet to tracker + insert into DB (no public channel post)
+        for (const bet of mappedBets) {
+            const betId = randomUUID();
+            const payout = calculatePayout(bet.risk, bet.odds);
+
+            const trackerMessageId = await postBetToTrackerChannel(
+                client,
+                userId,
+                betId,
+                bet.description,
+                bet.risk,
+                bet.sport,
+                bet.odds,
+                attachment.url,
+                null
+            );
+
+            await db.query(
+                `INSERT INTO bets
+                (id, user_id, username, bet_description, sport, risk, odds, payout, result, timestamp, message_id, channel_id, tracker_message_id)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending',$9,$10,$11,$12)`,
+                [betId, userId, username, bet.description, bet.sport, bet.risk, bet.odds, payout, timestamp, message.id, message.channelId, trackerMessageId || null]
+            );
+        }
+
+        // No public post or DM — tracker channel message serves as confirmation
+
     } catch (err) {
-        console.error('Error in bot mention handler:', err);
+        console.error('Error in mention bet scan handler:', err);
     }
 });
 
