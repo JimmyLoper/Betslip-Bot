@@ -86,7 +86,7 @@ async function handleEditBet(interaction) {
 
     const payoutInput = new TextInputBuilder()
         .setCustomId('payout')
-        .setLabel('Payout override (leave blank to auto-calculate)')
+        .setLabel('Payout (blank = auto-calculate)')
         .setStyle(TextInputStyle.Short)
         .setValue(payout.toString())
         .setRequired(false);
