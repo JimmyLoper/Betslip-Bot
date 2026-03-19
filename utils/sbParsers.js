@@ -68,13 +68,14 @@ Style 1 - Standard DraftKings (no SGPx badge):
 - Ladder-style bets show the same player with escalating thresholds as separate individual blocks — treat each as its own separate bet
 
 Style 2 - DraftKings SGPx (cross-game parlay):
-- Identified by a green "SGPx" badge in the top left of the screenshot
-- A header showing "X Pick Parlay | combined odds" = this is ONE single bet — use the header combined odds
-- Sub-blocks labeled "2 Pick SGP | odds" are individual legs within the parlay — their odds are leg odds only, IGNORE them
+- Identified by a green "SGPx" badge at the top of the screenshot, shown alongside a combined odds value (e.g. "+821")
+- When the SGPx badge is present, ALL content below it is part of that single parlay — do not treat anything below it as a separate bet
+- The top-level "X Pick Parlay | combined odds" header = this is ONE single bet — use ONLY these header combined odds
+- Any "X Pick SGP | odds" sub-blocks that appear below are legs within the SGPx parlay — their odds are leg odds only, IGNORE them entirely
 - Each sub-block contains individual prop legs and a game matchup pill showing team abbreviations
 - Description = all individual prop legs combined across all sub-blocks joined with " + " using last name and shortened stat format
 - betType = "SGPx"
-- Never create separate bet objects for SGPx — always return exactly ONE bet object regardless of how many sub-blocks appear
+- Never create separate bet objects for SGPx — always return exactly ONE bet object regardless of how many sub-SGP blocks appear below the header
 
 Style 3 - DraftKings ladder (single prop with escalating thresholds):
 - Multiple separate bet blocks each with their own odds and a yellow "Open" badge top right
