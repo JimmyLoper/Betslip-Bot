@@ -232,7 +232,7 @@ async function handleEditMsgCommand(interaction) {
 
     // Fetch last 5 bets posted in this channel
     const { rows } = await pool.query(
-        `SELECT id, bet_description, risk, odds, timestamp
+        `SELECT id, bet_description, risk, odds, timestamp, message_id
          FROM bets
          WHERE channel_id = $1 AND result = 'pending'
          ORDER BY timestamp DESC
@@ -244,20 +244,50 @@ async function handleEditMsgCommand(interaction) {
         return interaction.editReply({ content: 'No pending bets found in this channel.' });
     }
 
+    // Fetch unique public messages to get their content for labels
+    const uniqueMsgIds = [...new Set(rows.map(b => b.message_id).filter(Boolean))];
+    const msgContentMap = {};
+    for (const msgId of uniqueMsgIds) {
+        try {
+            const msg = await interaction.channel.messages.fetch(msgId);
+            if (msg) msgContentMap[msgId] = msg.content;
+        } catch (e) {
+            // message may have been deleted
+        }
+    }
+
     // Store screenshot URL if provided (with 5-min TTL)
     const ttl = setTimeout(() => pendingEdits.delete(interaction.id), 5 * 60 * 1000);
     pendingEdits.set(interaction.id, {
         screenshotUrl: screenshotAttachment?.url || null,
+        channelId,
         ttl
     });
 
-    // Build select menu options
+    // Build select menu options using the public message content
     const options = rows.map(bet => {
         const date = new Date(Number(bet.timestamp));
         const timeStr = date.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
-        const label = bet.bet_description.length > 95
-            ? bet.bet_description.substring(0, 95) + '...'
-            : bet.bet_description;
+
+        // Extract description from the public channel message content
+        let displayDesc = bet.bet_description; // fallback to DB description
+        const msgContent = msgContentMap[bet.message_id];
+        if (msgContent) {
+            // Strip role mentions, then grab the first bold text or first meaningful line
+            const cleaned = msgContent.replace(/<@&\d+>/g, '').trim();
+            const boldMatch = cleaned.match(/\*\*(.+?)\*\*/);
+            if (boldMatch) {
+                displayDesc = boldMatch[1];
+            } else {
+                // Use first non-empty line
+                const firstLine = cleaned.split('\n').find(l => l.trim().length > 0);
+                if (firstLine) displayDesc = firstLine.trim();
+            }
+        }
+
+        const label = displayDesc.length > 95
+            ? displayDesc.substring(0, 95) + '...'
+            : displayDesc;
 
         return {
             label,
