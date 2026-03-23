@@ -16,6 +16,7 @@ const { parseDescriptionInput } = require('../utils/parseDescription');
 const { mapUnitsToBets } = require('../utils/mapUnits');
 const { calculatePayout } = require('../utils/calcPayout');
 const { pendingOdds } = require('../utils/pendingOdds');
+const { pendingEdits } = require('../utils/pendingEdits');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -79,12 +80,25 @@ module.exports = {
                         .setDescription('Optional: Link to add to the bet')
                         .setRequired(false)
                 )
+        )
+
+        // Edit a previously posted bet message
+        .addSubcommand(sub =>
+            sub
+                .setName('edit')
+                .setDescription('Edit a previously posted bet (description, units, or screenshot)')
+                .addAttachmentOption(opt =>
+                    opt.setName('screenshot')
+                        .setDescription('Optional: New screenshot to replace the existing one')
+                        .setRequired(false)
+                )
         ),
 
     async execute(interaction) {
         const sub = interaction.options.getSubcommand();
         if (sub === 'post') return handleScanCommand(interaction);
         if (sub === 'manual') return handlePostCommand(interaction);
+        if (sub === 'edit') return handleEditMsgCommand(interaction);
     }
 };
 
@@ -205,6 +219,64 @@ async function handlePostCommand(interaction) {
             content: 'Error saving your bet.'
         });
     }
+}
+
+// ============================================================
+// EDIT COMMAND - SELECT A RECENT BET TO EDIT
+// ============================================================
+async function handleEditMsgCommand(interaction) {
+    await interaction.deferReply({ ephemeral: true });
+
+    const channelId = interaction.channel.id;
+    const screenshotAttachment = interaction.options.getAttachment('screenshot');
+
+    // Fetch last 5 bets posted in this channel
+    const { rows } = await pool.query(
+        `SELECT id, bet_description, risk, odds, timestamp
+         FROM bets
+         WHERE channel_id = $1 AND result = 'pending'
+         ORDER BY timestamp DESC
+         LIMIT 5`,
+        [channelId]
+    );
+
+    if (rows.length === 0) {
+        return interaction.editReply({ content: 'No pending bets found in this channel.' });
+    }
+
+    // Store screenshot URL if provided (with 5-min TTL)
+    const ttl = setTimeout(() => pendingEdits.delete(interaction.id), 5 * 60 * 1000);
+    pendingEdits.set(interaction.id, {
+        screenshotUrl: screenshotAttachment?.url || null,
+        ttl
+    });
+
+    // Build select menu options
+    const options = rows.map(bet => {
+        const date = new Date(Number(bet.timestamp));
+        const timeStr = date.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true });
+        const label = bet.bet_description.length > 95
+            ? bet.bet_description.substring(0, 95) + '...'
+            : bet.bet_description;
+
+        return {
+            label,
+            description: `${bet.risk}u | ${bet.odds > 0 ? '+' : ''}${bet.odds} | ${timeStr}`,
+            value: `${bet.id}__${interaction.id}`
+        };
+    });
+
+    const selectMenu = new StringSelectMenuBuilder()
+        .setCustomId('bet_edit_select')
+        .setPlaceholder('Select a bet to edit')
+        .addOptions(options);
+
+    const row = new ActionRowBuilder().addComponents(selectMenu);
+
+    return interaction.editReply({
+        content: 'Select a bet to edit:',
+        components: [row]
+    });
 }
 
 // Post bet to tracker channel
@@ -389,14 +461,14 @@ async function handleScanCommand(interaction) {
     }
 
     // ── 3. Parse description for units + note ───────────────────
-    const { units, note } = parseDescriptionInput(descriptionText);
+    const { units, note, eachUnit, unitMap } = parseDescriptionInput(descriptionText);
 
     if (units.length === 0) {
         return interaction.editReply({ content: '⚠️ Could not find any unit sizes in your description. Include values like `1u`, `0.5u`, etc.' });
     }
 
     // ── 4. Map units to bets ─────────────────────────────────────
-    const mappedBets = mapUnitsToBets(units, parsedBets);
+    const mappedBets = mapUnitsToBets(units, parsedBets, eachUnit, unitMap);
 
     // ── 5. Fetch notify role + tracker channel ───────────────────
     const { rows: capperRows } = await pool.query(

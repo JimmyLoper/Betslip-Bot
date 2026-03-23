@@ -240,7 +240,7 @@ async function processMentionBet(message) {
     const cleanContent = message.content.replace(/<@!?\d+>/g, '').trim();
 
     const { parseDescriptionInput } = require('./utils/parseDescription');
-    const { units, note } = parseDescriptionInput(cleanContent);
+    const { units, note, eachUnit, unitMap } = parseDescriptionInput(cleanContent);
     const attachment = message.attachments.first();
 
     // ── No units or no screenshot → fall back to admin DM notification ──
@@ -334,7 +334,7 @@ async function processMentionBet(message) {
     const { randomUUID } = require('crypto');
     const { postBetToTrackerChannel } = require('./commands/bet');
 
-    const mappedBets = mapUnitsToBets(units, parsedBets);
+    const mappedBets = mapUnitsToBets(units, parsedBets, eachUnit, unitMap);
     const timestamp = Date.now();
 
     // 4. Post each bet to tracker + insert into DB (no public channel post)

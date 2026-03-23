@@ -51,7 +51,15 @@ Style 4 - FanDuel separate straights betslip (unplaced):
 - Description = team/player + bet type + line for each block
 - betType = "spread", "moneyline", or "total" as appropriate
 
-For Styles 1 and 2: return exactly ONE bet object for the entire slip, not one per leg.
+Style 5 - FanDuel betslip showing legs + parlay section:
+- Individual bet blocks at top each with their own WAGER/TO WIN boxes and CASH OUT button — these are the legs, not separate bets
+- "Remove all selections" button in the middle separating legs from parlay
+- "X leg Parlay" section at the bottom with its own combined WAGER/TO WIN box and combined odds = this is the actual bet
+- ONE bet object using the combined odds from the parlay section at the bottom
+- betType = "parlay"
+- Never treat the individual leg blocks at the top as separate bets in this layout
+
+For Styles 1, 2, and 5: return exactly ONE bet object for the entire slip, not one per leg.
 For Style 3: return exactly ONE bet object.
 For Style 4: return one bet object per block.`;
             break;
@@ -75,7 +83,7 @@ Style 2 - DraftKings SGPx (cross-game parlay):
 - Each sub-block contains individual prop legs and a game matchup pill showing team abbreviations
 - Description = all individual prop legs combined across all sub-blocks joined with " + " using last name and shortened stat format
 - betType = "SGPx"
-- Never create separate bet objects for SGPx — always return exactly ONE bet object regardless of how many sub-SGP blocks appear below the header
+- When a green SGPx badge appears at the top of the screenshot, return exactly ONE bet object. This is an absolute rule with no exceptions. Any sub-SGP blocks, individual legs, or nested SGP headers anywhere below the SGPx badge are all part of that single bet. Never return more than one bet object when SGPx is present.
 
 Style 3 - DraftKings ladder (single prop with escalating thresholds):
 - Multiple separate bet blocks each with their own odds and a yellow "Open" badge top right
@@ -85,6 +93,35 @@ Style 3 - DraftKings ladder (single prop with escalating thresholds):
 - Each block = its own separate bet object
 - Description = last name + threshold + shortened stat (e.g. "George 2+ Threes")
 - This is the opposite of SGPx — always multiple bet objects, never one`;
+            break;
+
+        case 'betmgm':
+            sbInstructions = `
+SPORTSBOOK: BetMGM — three screenshot styles:
+
+Style 1 - BetMGM parlay unplaced:
+- "Parlay X Legs" header with combined odds top right and expand/collapse arrow
+- Legs connected by vertical grey line on left
+- Each leg shows "Yes"/"No", prop description, matchup, and individual leg odds
+- Individual leg odds are leg odds only — ignore them
+- ONE bet object using combined header odds
+- betType = "parlay"
+
+Style 2 - BetMGM parlay placed/active:
+- "Parlay \u2022 X Legs" header with combined odds top right
+- "Hide legs" or "Show legs" toggle in blue below header
+- Each leg shows team/player name, bet type, full matchup and date
+- ONE bet object using combined header odds
+- betType = "parlay"
+
+Style 3 - BetMGM SGP+ (cross-game SGP):
+- Gold "SGP+" badge top left with total leg count and combined odds top right
+- Sub-blocks below each with their own gold "SGP" badge, leg count, odds, and game
+- Individual props listed under each sub-block
+- ONE bet object using the SGP+ header odds only
+- Sub-block odds are leg odds — ignore them completely
+- betType = "SGP+"
+- Never return more than one bet object when SGP+ badge is present`;
             break;
 
         case 'fanatics':
@@ -140,6 +177,12 @@ Look at the screenshot and determine the bet type using ONLY these rules:
 - If you see a single header (e.g. "2 leg parlay", "Same Game Parlay", "SGP") with ONE combined odds value at the top and multiple legs listed beneath it connected by dots or inside one card = this is ONE single bet, classify as "single"
 - If you see multiple completely separate bet blocks each with their own header and their own final odds value, and they show the same player/prop with escalating thresholds = classify as "ladder"
 ${sbInstructions}
+
+CRITICAL PARSING RULES:
+- When a green SGPx badge (DraftKings) or gold SGP+ badge (BetMGM) appears at the top of the screenshot, return exactly ONE bet object. This is an absolute rule with no exceptions. Any sub-SGP blocks, individual legs, or nested SGP headers anywhere below are all part of that single bet. Never return more than one bet object when SGPx or SGP+ is present.
+- Gold "SGP+" badge = ONE single bet object, same rule as green SGPx badge. Any sub-SGP blocks below are legs, not separate bets.
+- Trash can icons on bet blocks = unplaced betslip items, each is an independent bet UNLESS no individual wager inputs are present, in which case treat as parlay legs.
+- When a "Parlay X Legs" or "Parlay \u2022 X Legs" header is present with combined odds, always return ONE bet object regardless of how many legs are shown below.
 
 STEP 2 — PARSE BASED ON CLASSIFICATION:
 If classified as "single":
