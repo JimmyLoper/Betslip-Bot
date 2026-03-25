@@ -167,7 +167,7 @@ async function handleEditModal(interaction) {
                         newContent = '';
                         if (notifyRoleId) newContent += `<@&${notifyRoleId}>\n\n`;
                         newContent += `**${newDescription}**\n`;
-                        newContent += `Risk: **${newRisk}u**\n\n`;
+                        newContent += `${newRisk}u\n\n`;
                     } else {
                         // Multi-bet (scan batch) — update the specific unit line
                         const betIndex = siblingBets.findIndex(b => b.id === betId);
