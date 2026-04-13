@@ -266,9 +266,6 @@ async function handleEditMsgCommand(interaction) {
 
     // Build select menu options using the public message content
     const options = rows.map(bet => {
-        const unixSeconds = Math.floor(Number(bet.timestamp) / 1000);
-        const relativeTime = `<t:${unixSeconds}:R>`;
-
         // Extract description from the public channel message content
         let displayDesc = bet.bet_description; // fallback to DB description
         const msgContent = msgContentMap[bet.message_id];
@@ -292,23 +289,19 @@ async function handleEditMsgCommand(interaction) {
         return {
             label,
             description: `${bet.risk}u | ${bet.odds > 0 ? '+' : ''}${bet.odds}`,
-            value: `${bet.id}__${interaction.id}`,
-            relativeTime
+            value: `${bet.id}__${interaction.id}`
         };
     });
 
     const selectMenu = new StringSelectMenuBuilder()
         .setCustomId('bet_edit_select')
         .setPlaceholder('Select a bet to edit')
-        .addOptions(options.map(({ relativeTime, ...opt }) => opt));
+        .addOptions(options);
 
     const row = new ActionRowBuilder().addComponents(selectMenu);
 
-    // Show Discord timestamps above the menu so they render in the user's local timezone
-    const listing = options.map((opt, i) => `**${i + 1}.** ${opt.label} — ${opt.description} — ${opt.relativeTime}`).join('\n');
-
     return interaction.editReply({
-        content: `Select a bet to edit:\n${listing}`,
+        content: 'Select a bet to edit:',
         components: [row]
     });
 }
