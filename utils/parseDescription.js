@@ -64,18 +64,19 @@ function parseDescriptionInput(descriptionText) {
         if (!units.includes(v)) units.push(v);
     }
 
-    // Parse remaining text for any non-contextual unit values
+    // Parse remaining text for any non-contextual unit values.
+    // Collect all matches first WITHOUT mutating remaining — mutating while exec
+    // advances lastIndex through the original string causes lastIndex to skip
+    // characters in the shortened string, producing corrupt values for decimal units.
     let match;
     while ((match = unitRegex.exec(remaining)) !== null) {
         const value = parseFloat(match[1]);
-        const unitStr = `${value}u`;
-        units.push(unitStr);
-        // Remove matched portion from remaining string
-        remaining = remaining.replace(match[0], ' ');
+        units.push(`${value}u`);
     }
 
-    // Clean up the remaining text to extract the note
+    // Strip matched unit tokens from remaining separately for note extraction
     const note = remaining
+        .replace(unitRegex, ' ')
         .replace(/\s+/g, ' ')
         .trim();
 
