@@ -161,10 +161,38 @@ Style 3 - Fanatics unplaced parlay legs betslip:
 - betType = "parlay"`;
             break;
 
+                case 'betrpicks':
+                case 'betr':
+                        sbInstructions = `
+SPORTSBOOK: Betr Picks:
+- Identified by "betr" logo with lightning bolt and "PICKS" badge at top
+- Shows a multiplier (e.g. "6x") in the center between "Perfect $[amount]"
+    and "Wins up to $[amount]" — ignore dollar amounts entirely
+- Multiple player legs shown as individual cards each with:
+    - Player photo left
+    - Player name (abbreviated first initial + last name e.g. "S. Cunningham")
+    - Position and team abbreviation after a dot (e.g. "SG, IND")
+    - Arrow up (over) or arrow down (under) + threshold + stat type
+        (e.g. "↑ 9.5 Points")
+- "Placed [date] @ [time]" shown at bottom
+- Always ONE single bet object regardless of how many legs appear
+- Convert multiplier to American odds equivalent using formula:
+    (multiplier - 1) * 100, result is always positive odds
+    Examples: 6x = +500, 3x = +200, 1.5x = +50
+- odds = converted American odds value
+- betType = "parlay"
+- description = all legs combined with " + " using last name only and
+    shortened stat (e.g. "Cunningham 9.5+ Pts + Ogwumike 17.5+ Pts +
+    Nelson-Ododa 13.5+ Pts")
+- sport = infer from team abbreviations and player context
+- Ignore all dollar amounts (Perfect amount, Wins up to amount)`;
+                        break;
+
         default:
             sbInstructions = `
 SPORTSBOOK: Unknown — apply general rules:
 - Look for odds values in American format (e.g. -110, +150) typically positioned near the top right of each bet block
+- If no odds look for multipliers (e.g. "6x"), convert them to American odds using the formula: (multiplier - 1) * 100, result is always positive odds (e.g. 6x = +500)
 - Each visually distinct bet block should be treated as a separate bet
 - Extract the most descriptive text in the block as the description`;
             break;
