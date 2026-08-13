@@ -5,11 +5,8 @@ const {
     ActionRowBuilder,
     ButtonBuilder,
     ButtonStyle,
-    EmbedBuilder,
     StringSelectMenuBuilder,
-    ModalBuilder,
-    TextInputBuilder,
-    TextInputStyle
+    MessageFlags,
 } = require('discord.js');
 const { buildSystemPrompt } = require('../utils/sbParsers');
 const { parseDescriptionInput } = require('../utils/parseDescription');
@@ -41,6 +38,16 @@ module.exports = {
                 .addStringOption(opt =>
                     opt.setName('link')
                         .setDescription('Optional: Link to add to the bet')
+                        .setRequired(false)
+                )
+                .addStringOption(opt =>
+                    opt.setName('link_2')
+                        .setDescription('Optional: Second link to add to the bet')
+                        .setRequired(false)
+                )
+                .addStringOption(opt =>
+                    opt.setName('link_3')
+                        .setDescription('Optional: Third link to add to the bet')
                         .setRequired(false)
                 )
         )
@@ -80,6 +87,16 @@ module.exports = {
                         .setDescription('Optional: Link to add to the bet')
                         .setRequired(false)
                 )
+                .addStringOption(opt =>
+                    opt.setName('link_2')
+                        .setDescription('Optional: Second link to add to the bet')
+                        .setRequired(false)
+                )
+                .addStringOption(opt =>
+                    opt.setName('link_3')
+                        .setDescription('Optional: Third link to add to the bet')
+                        .setRequired(false)
+                )
         )
 
         // Edit a previously posted bet message
@@ -107,7 +124,7 @@ module.exports = {
 // ============================================================
 async function handlePostCommand(interaction) {
     // Defer reply immediately to prevent double-clicks from executing twice
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const userId = interaction.user.id;
     const username = interaction.user.username;
@@ -118,6 +135,8 @@ async function handlePostCommand(interaction) {
     const odds = interaction.options.getNumber('odds');
     const screenshotAttachment = interaction.options.getAttachment('screenshot');
     const link = interaction.options.getString('link');
+    const link_2 = interaction.options.getString('link_2');
+    const link_3 = interaction.options.getString('link_3');
 
     // Validate inputs
     if (isNaN(risk) || isNaN(odds)) {
@@ -161,6 +180,26 @@ async function handlePostCommand(interaction) {
                     .setEmoji('🔗')
             );
             components.push(linkRow);
+        }
+        if (link_2) {
+            const linkRow2 = new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setLabel('Link 2')
+                    .setStyle(ButtonStyle.Link)
+                    .setURL(link_2)
+                    .setEmoji('🔗')
+            );
+            components.push(linkRow2);
+        }
+        if (link_3) {
+            const linkRow3 = new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setLabel('Link 3')
+                    .setStyle(ButtonStyle.Link)
+                    .setURL(link_3)
+                    .setEmoji('🔗')
+            );
+            components.push(linkRow3);
         }
 
         // Send message to channel FIRST (before inserting to DB)
@@ -389,6 +428,8 @@ async function handleScanCommand(interaction) {
     const descriptionText = interaction.options.getString('description');
     const screenshotAttachment = interaction.options.getAttachment('screenshot');
     const link = interaction.options.getString('link');
+    const link_2 = interaction.options.getString('link_2');
+    const link_3 = interaction.options.getString('link_3');
 
     // ── 1. Fetch & base64 encode the screenshot ─────────────────
     let imageBase64;
@@ -427,8 +468,8 @@ async function handleScanCommand(interaction) {
         const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
         const response = await anthropic.messages.create({
-            model: 'claude-sonnet-4-6',
-            max_tokens: 1000,
+            model: 'claude-sonnet-5',
+            max_tokens: 2500,
             system: buildSystemPrompt(),
             messages: [
                 {
@@ -527,6 +568,29 @@ async function handleScanCommand(interaction) {
                         .setURL(link)
                         .setEmoji('🔗')
                 )
+                
+            );
+        }
+        if (link_2) {
+            publicComponents.push(
+                new ActionRowBuilder().addComponents(
+                    new ButtonBuilder()
+                        .setLabel('Link 2')
+                        .setStyle(ButtonStyle.Link)
+                        .setURL(link_2)
+                        .setEmoji('🔗')
+                )
+            );
+        }
+        if (link_3) {
+            publicComponents.push(
+                new ActionRowBuilder().addComponents(
+                    new ButtonBuilder()
+                        .setLabel('Link 3')
+                        .setStyle(ButtonStyle.Link)
+                        .setURL(link_3)
+                        .setEmoji('🔗')
+                )
             );
         }
 
@@ -553,7 +617,7 @@ async function handleScanCommand(interaction) {
                 bet.sport,
                 bet.odds,
                 screenshotAttachment.url,
-                link
+                link, link_2, link_3
             );
 
             await pool.query(
@@ -564,7 +628,7 @@ async function handleScanCommand(interaction) {
             );
 
             if (bet.odds === 0) {
-                zeroOddsBets.push({ betId, trackerMessageId, description: bet.description, risk: bet.risk, sport: bet.sport, screenshotUrl: screenshotAttachment.url, link });
+                zeroOddsBets.push({ betId, trackerMessageId, description: bet.description, risk: bet.risk, sport: bet.sport, screenshotUrl: screenshotAttachment.url, link, link_2, link_3 });
             }
         }
 

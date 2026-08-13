@@ -4,9 +4,19 @@ const {
     GatewayIntentBits,
     Collection
 } = require('discord.js');
+const { parseDescriptionInput } = require('./utils/parseDescription');
 const fs = require('fs');
 const path = require('path');
-
+const adminId = process.env.ADMIN_OVERRIDE_ID;
+const https = require('https');
+const http = require('http');
+const { URL } = require('url');
+const Anthropic = require('@anthropic-ai/sdk');
+const { buildSystemPrompt } = require('./utils/sbParsers');
+const { mapUnitsToBets } = require('./utils/mapUnits');
+const { calculatePayout } = require('./utils/calcPayout');
+const { randomUUID } = require('crypto');
+const { postBetToTrackerChannel } = require('./commands/bet');
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -239,13 +249,12 @@ async function processMentionBet(message) {
     // Strip all mentions from content to isolate the description/units text
     const cleanContent = message.content.replace(/<@!?\d+>/g, '').trim();
 
-    const { parseDescriptionInput } = require('./utils/parseDescription');
     const { units, note, eachUnit, unitMap } = parseDescriptionInput(cleanContent);
     const attachment = message.attachments.first();
 
     // ── No units or no screenshot → fall back to admin DM notification ──
     if (units.length === 0 || !attachment) {
-        const adminId = process.env.ADMIN_OVERRIDE_ID;
+
         if (!adminId) return false;
         const admin = await client.users.fetch(adminId).catch(() => null);
         if (!admin) return false;
@@ -272,9 +281,6 @@ async function processMentionBet(message) {
     // 1. Fetch & base64 encode the screenshot
     let imageBase64, imageMediaType = 'image/jpeg';
     try {
-        const https = require('https');
-        const http = require('http');
-        const { URL } = require('url');
 
         const fetchBuffer = (url) => new Promise((resolve, reject) => {
             const parsedUrl = new URL(url);
@@ -302,13 +308,11 @@ async function processMentionBet(message) {
     // 2. Call Claude API
     let parsedBets;
     try {
-        const Anthropic = require('@anthropic-ai/sdk');
-        const { buildSystemPrompt } = require('./utils/sbParsers');
         const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
         const response = await anthropic.messages.create({
-            model: 'claude-sonnet-4-6',
-            max_tokens: 1000,
+            model: 'claude-sonnet-5',
+            max_tokens: 2500,
             system: buildSystemPrompt(),
             messages: [{
                 role: 'user',
@@ -329,11 +333,6 @@ async function processMentionBet(message) {
     }
 
     // 3. Map units to bets
-    const { mapUnitsToBets } = require('./utils/mapUnits');
-    const { calculatePayout } = require('./utils/calcPayout');
-    const { randomUUID } = require('crypto');
-    const { postBetToTrackerChannel } = require('./commands/bet');
-
     const mappedBets = mapUnitsToBets(units, parsedBets, eachUnit, unitMap);
     const timestamp = Date.now();
 
