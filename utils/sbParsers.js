@@ -17,7 +17,7 @@ function buildSystemPrompt(hint) {
     switch (normalizedHint) {
         case 'fanduel':
             sbInstructions = `
-SPORTSBOOK: FanDuel — four possible screenshot styles, all are FanDuel:
+SPORTSBOOK: FanDuel — six possible screenshot styles, all are FanDuel:
 
 Style 1 - Manual screenshot of FanDuel app (dark background, placed bet):
 - A "X leg parlay" or "Same Game Parlay" header with combined odds shown top right = this is ONE single bet
@@ -59,8 +59,19 @@ Style 5 - FanDuel betslip showing legs + parlay section:
 - betType = "parlay"
 - Never treat the individual leg blocks at the top as separate bets in this layout
 
-For Styles 1, 2, and 5: return exactly ONE bet object for the entire slip, not one per leg.
-For Style 3: return exactly ONE bet object.
+Style 6 - FanDuel SGP+ (cross-game Same Game Parlay+):
+- Identified by "SGP +" badge top left and "X leg Same Game Parlay+" header
+- Combined odds shown top right = the actual bet odds, this is always ONE single bet
+- May contain sub-SGP blocks with their own SGP badge and individual odds — these are legs only, IGNORE their odds
+- May contain individual selections from other games with their own odds — also legs, IGNORE their odds
+- "Includes: X Same Game Parlay + X selection" text describes the structure, not separate bets
+- Use ONLY the top level combined odds from the header
+- Description = all legs combined across all sub-blocks with " + "
+- betType = "SGP+"
+- Never return more than one bet object when SGP+ badge is present
+
+For Styles 1, 2, 5, and 6: return exactly ONE bet object for the entire slip, not one per leg.
+For Style 3: return exactly ONE bet object with odds set to 0.
 For Style 4: return one bet object per block.`;
             break;
 
