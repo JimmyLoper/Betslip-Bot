@@ -258,6 +258,7 @@ Output rules:
 - Return bets in visual order top to bottom as they appear in the screenshot
 - If a bet has no readable odds, skip it
 - Return ONLY a valid JSON array — no markdown, no explanation, no backticks, no code fences
+- Do not think out loud, self-correct, or restate/revise your answer in the response — decide internally and output the array exactly once
 - The response must start with [ and end with ]`;
 }
 

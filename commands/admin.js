@@ -130,10 +130,11 @@ async function handleAddBet(interaction) {
             parsedBets = JSON.parse(rawText);
         } catch (parseErr) {
             console.error('[Admin] Raw Claude response that failed JSON.parse:', rawText);
-            // fall back to extracting the first [...] block in case of stray trailing text/fences
-            const match = rawText.match(/\[[\s\S]*\]/);
-            if (match) {
-                parsedBets = JSON.parse(match[0]);
+            // Claude sometimes self-corrects mid-response (e.g. "Wait, ...") and prints a second
+            // array — take the LAST match since that's the corrected/final answer.
+            const matches = rawText.match(/\[[\s\S]*?\]/g);
+            if (matches && matches.length > 0) {
+                parsedBets = JSON.parse(matches[matches.length - 1]);
             } else {
                 throw parseErr;
             }

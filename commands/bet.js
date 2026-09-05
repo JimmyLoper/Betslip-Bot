@@ -478,7 +478,14 @@ async function handleScanCommand(interaction) {
         });
 
         rawClaudeOutput = response.content[0].text.trim();
-        parsedBets = JSON.parse(rawClaudeOutput);
+        try {
+            parsedBets = JSON.parse(rawClaudeOutput);
+        } catch (parseErr) {
+            // Claude sometimes self-corrects mid-response and prints a second array — take the last (final) one.
+            const matches = rawClaudeOutput.match(/\[[\s\S]*?\]/g);
+            if (!matches || matches.length === 0) throw parseErr;
+            parsedBets = JSON.parse(matches[matches.length - 1]);
+        }
 
         if (!Array.isArray(parsedBets) || parsedBets.length === 0) {
             throw new Error('Empty or non-array response from Claude');

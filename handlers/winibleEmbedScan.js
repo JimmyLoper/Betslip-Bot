@@ -103,9 +103,11 @@ async function winibleEmbedScan(message) {
 
             const textBlock = response.content.find(block => block.type === 'text');
             if (!textBlock || !textBlock.text) throw new Error('No text content in Claude response');
-            const jsonMatch = textBlock.text.trim().match(/\[[\s\S]*\]/);
-            if (!jsonMatch) throw new Error('No JSON array found in Claude response');
-            parsedBets = JSON.parse(jsonMatch[0]);
+            const rawText = textBlock.text.trim();
+            // Claude sometimes self-corrects mid-response and prints a second array — take the last (final) one.
+            const jsonMatches = rawText.match(/\[[\s\S]*?\]/g);
+            if (!jsonMatches || jsonMatches.length === 0) throw new Error('No JSON array found in Claude response');
+            parsedBets = JSON.parse(jsonMatches[jsonMatches.length - 1]);
             if (!Array.isArray(parsedBets) || parsedBets.length === 0) throw new Error('Empty or non-array response');
         } catch (claudeErr) {
             console.error('Claude parse error (Winible embed flow):', claudeErr);

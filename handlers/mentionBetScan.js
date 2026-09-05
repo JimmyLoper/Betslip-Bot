@@ -88,7 +88,14 @@ async function processMentionBet(message, client) {
         });
 
         const rawText = response.content[0].text.trim();
-        parsedBets = JSON.parse(rawText);
+        try {
+            parsedBets = JSON.parse(rawText);
+        } catch (parseErr) {
+            // Claude sometimes self-corrects mid-response and prints a second array — take the last (final) one.
+            const matches = rawText.match(/\[[\s\S]*?\]/g);
+            if (!matches || matches.length === 0) throw parseErr;
+            parsedBets = JSON.parse(matches[matches.length - 1]);
+        }
         if (!Array.isArray(parsedBets) || parsedBets.length === 0) throw new Error('Empty or non-array response');
     } catch (claudeErr) {
         console.error('Claude parse error (mention flow):', claudeErr);
