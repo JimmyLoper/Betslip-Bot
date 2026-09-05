@@ -5,6 +5,7 @@ const {
     ActionRowBuilder,
     ButtonBuilder,
     ButtonStyle,
+    EmbedBuilder,
     StringSelectMenuBuilder,
     MessageFlags,
 } = require('discord.js');
@@ -14,6 +15,7 @@ const { mapUnitsToBets } = require('../utils/mapUnits');
 const { calculatePayout } = require('../utils/calcPayout');
 const { pendingOdds } = require('../utils/pendingOdds');
 const { pendingEdits } = require('../utils/pendingEdits');
+const { fetchImageBuffer, resolveMediaType } = require('../utils/fetchImage');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -433,29 +435,11 @@ async function handleScanCommand(interaction) {
 
     // ── 1. Fetch & base64 encode the screenshot ─────────────────
     let imageBase64;
-    let imageMediaType = 'image/jpeg';
+    let imageMediaType;
     try {
-        const https = require('https');
-        const http = require('http');
-        const { URL } = require('url');
-
-        const fetchBuffer = (url) => new Promise((resolve, reject) => {
-            const parsedUrl = new URL(url);
-            const lib = parsedUrl.protocol === 'https:' ? https : http;
-            lib.get(url, (res) => {
-                const chunks = [];
-                res.on('data', chunk => chunks.push(chunk));
-                res.on('end', () => resolve({ buffer: Buffer.concat(chunks), contentType: res.headers['content-type'] || 'image/jpeg' }));
-                res.on('error', reject);
-            }).on('error', reject);
-        });
-
-        const { buffer, contentType } = await fetchBuffer(screenshotAttachment.url);
+        const { buffer, contentType } = await fetchImageBuffer(screenshotAttachment.url);
         imageBase64 = buffer.toString('base64');
-        if (contentType.includes('png')) imageMediaType = 'image/png';
-        else if (contentType.includes('gif')) imageMediaType = 'image/gif';
-        else if (contentType.includes('webp')) imageMediaType = 'image/webp';
-        else imageMediaType = 'image/jpeg';
+        imageMediaType = resolveMediaType(contentType);
     } catch (fetchErr) {
         console.error('Failed to fetch screenshot:', fetchErr);
         return interaction.editReply({ content: '⚠️ Could not load the screenshot. Please try again.' });
@@ -463,6 +447,7 @@ async function handleScanCommand(interaction) {
 
     // ── 2. Call Claude API ───────────────────────────────────────
     let parsedBets;
+    let rawClaudeOutput;
     try {
         const Anthropic = require('@anthropic-ai/sdk');
         const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -492,8 +477,8 @@ async function handleScanCommand(interaction) {
             ]
         });
 
-        const rawText = response.content[0].text.trim();
-        parsedBets = JSON.parse(rawText);
+        rawClaudeOutput = response.content[0].text.trim();
+        parsedBets = JSON.parse(rawClaudeOutput);
 
         if (!Array.isArray(parsedBets) || parsedBets.length === 0) {
             throw new Error('Empty or non-array response from Claude');
@@ -507,25 +492,31 @@ async function handleScanCommand(interaction) {
             if (adminId) {
                 const admin = await interaction.client.users.fetch(adminId).catch(() => null);
                 if (admin) {
-                    const { EmbedBuilder } = require('discord.js');
-                    const rawOutput = claudeErr?.message || 'Unknown error';
+                    const errorMessage = claudeErr?.message || 'Unknown error';
                     const embed = new EmbedBuilder()
                         .setTitle('⚠️ AI Parse Failed')
                         .setColor(0xF39C12)
                         .addFields(
                             { name: 'User', value: `<@${userId}> (${userId})`, inline: false },
                             { name: 'Description Input', value: descriptionText, inline: false },
-                            { name: 'Error', value: `\`\`\`${rawOutput}\`\`\``, inline: false }
+                            { name: 'Error', value: `\`\`\`${errorMessage}\`\`\``, inline: false }
                         )
                         .setTimestamp();
-                    await admin.send({ embeds: [embed], files: [screenshotAttachment.url] }).catch(() => {});
+                    const files = [screenshotAttachment.url];
+                    if (rawClaudeOutput) {
+                        files.push({
+                            attachment: Buffer.from(rawClaudeOutput, 'utf8'),
+                            name: 'claude-response.json'
+                        });
+                    }
+                    await admin.send({ embeds: [embed], files }).catch(() => {});
                 }
             }
         } catch (dmErr) {
             console.error('Failed to send parse error DM:', dmErr);
         }
 
-        return interaction.editReply({ content: '⚠️ Could not parse the screenshot. Please try `/bet manual` instead.' });
+        return interaction.editReply({ content: '⚠️ Could not read the screenshot. Please check the screenshot and try again.' });
     }
 
     // ── 3. Parse description for units + note ───────────────────

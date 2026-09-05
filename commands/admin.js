@@ -6,6 +6,7 @@ const { parseDescriptionInput } = require('../utils/parseDescription');
 const { mapUnitsToBets } = require('../utils/mapUnits');
 const { calculatePayout } = require('../utils/calcPayout');
 const { postBetToTrackerChannel } = require('./bet');
+const { fetchImageBuffer, resolveMediaType } = require('../utils/fetchImage');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -77,7 +78,7 @@ async function handleAddBet(interaction) {
 
     // Look up capper for this channel
     const { rows: capperRows } = await pool.query(
-        `SELECT user_id, username FROM capper_info WHERE channel_id = $1`,
+        `SELECT user_id, username, live_play_channel_id FROM capper_info WHERE channel_id = $1 OR live_play_channel_id = $1`,
         [channelId]
     );
 
@@ -86,32 +87,15 @@ async function handleAddBet(interaction) {
     }
 
     const { user_id: userId, username } = capperRows[0];
+    const isLivePlay = channelId === capperRows[0].live_play_channel_id ? 1 : 0;
 
     // ── 1. Fetch & base64 encode the screenshot ──────────────────
     let imageBase64;
-    let imageMediaType = 'image/jpeg';
+    let imageMediaType;
     try {
-        const https = require('https');
-        const http = require('http');
-        const { URL } = require('url');
-
-        const fetchBuffer = (url) => new Promise((resolve, reject) => {
-            const parsedUrl = new URL(url);
-            const lib = parsedUrl.protocol === 'https:' ? https : http;
-            lib.get(url, (res) => {
-                const chunks = [];
-                res.on('data', chunk => chunks.push(chunk));
-                res.on('end', () => resolve({ buffer: Buffer.concat(chunks), contentType: res.headers['content-type'] || 'image/jpeg' }));
-                res.on('error', reject);
-            }).on('error', reject);
-        });
-
-        const { buffer, contentType } = await fetchBuffer(screenshotAttachment.url);
+        const { buffer, contentType } = await fetchImageBuffer(screenshotAttachment.url);
         imageBase64 = buffer.toString('base64');
-        if (contentType.includes('png')) imageMediaType = 'image/png';
-        else if (contentType.includes('gif')) imageMediaType = 'image/gif';
-        else if (contentType.includes('webp')) imageMediaType = 'image/webp';
-        else imageMediaType = 'image/jpeg';
+        imageMediaType = resolveMediaType(contentType);
     } catch (fetchErr) {
         console.error('[Admin] Failed to fetch screenshot:', fetchErr.message);
         return interaction.editReply({ content: '⚠️ Could not load the screenshot. Please try again.' });
@@ -185,9 +169,9 @@ async function handleAddBet(interaction) {
 
             await pool.query(
                 `INSERT INTO bets
-                (id, user_id, username, bet_description, sport, risk, odds, payout, result, timestamp, message_id, channel_id, tracker_message_id)
-                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending',$9,$10,$11,$12)`,
-                [betId, userId, username, bet.description, bet.sport, bet.risk, odds, payout, timestamp, null, channelId, trackerMessageId || null]
+                (id, user_id, username, bet_description, sport, risk, odds, payout, result, timestamp, message_id, channel_id, tracker_message_id, is_live_play)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending',$9,$10,$11,$12,$13)`,
+                [betId, userId, username, bet.description, bet.sport, bet.risk, odds, payout, timestamp, null, channelId, trackerMessageId || null, isLivePlay]
             );
         }
 

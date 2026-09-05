@@ -43,6 +43,7 @@ GUILD_ID=your_guild_id
 DATABASE_URL=your_postgres_connection_string
 ANTHROPIC_API_KEY=your_anthropic_api_key
 ADMIN_OVERRIDE_ID=discord_user_id_for_admin_commands
+WINIBLE_BOT_ID=user id for winible bot
 ```
 
 ### 3. Set up the database
