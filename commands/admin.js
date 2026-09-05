@@ -109,7 +109,7 @@ async function handleAddBet(interaction) {
 
         const response = await anthropic.messages.create({
             model: 'claude-sonnet-4-6',
-            max_tokens: 1000,
+            max_tokens: 2500,
             system: buildSystemPrompt(),
             messages: [
                 {
@@ -126,10 +126,17 @@ async function handleAddBet(interaction) {
         });
 
         const rawText = response.content[0].text.trim();
-        parsedBets = JSON.parse(rawText);
-
-        if (!Array.isArray(parsedBets) || parsedBets.length === 0) {
-            throw new Error('Empty or non-array response from Claude');
+        try {
+            parsedBets = JSON.parse(rawText);
+        } catch (parseErr) {
+            console.error('[Admin] Raw Claude response that failed JSON.parse:', rawText);
+            // fall back to extracting the first [...] block in case of stray trailing text/fences
+            const match = rawText.match(/\[[\s\S]*\]/);
+            if (match) {
+                parsedBets = JSON.parse(match[0]);
+            } else {
+                throw parseErr;
+            }
         }
     } catch (claudeErr) {
         console.error('[Admin] Claude parse error:', claudeErr.message);
