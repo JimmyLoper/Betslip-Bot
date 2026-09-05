@@ -39,6 +39,7 @@ async function winibleEmbedScan(message) {
         // ── Detection ──────────────────────────────────────────────
         if (!message.author?.bot) return;
         if (message.author.id !== process.env.WINIBLE_BOT_ID) return;
+        console.log(`Winible embed scan: detected message from Winible bot with ID ${message.id} in channel ${message.channel.id}`);
         if (message.embeds.length === 0) return;
 
         const { rows: capperRows } = await db.query(
