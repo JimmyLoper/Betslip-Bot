@@ -153,15 +153,16 @@ async function handlePostCommand(interaction) {
     const timestamp = Date.now();
 
     try {
-        // Fetch auto-notify role for this channel
+        // Fetch auto-notify role for this channel (main or live play channel)
         const { rows } = await pool.query(
-            `SELECT notify_role_id 
+            `SELECT notify_role_id, live_play_channel_id
              FROM capper_info 
-             WHERE channel_id = $1`,
+             WHERE channel_id = $1 OR live_play_channel_id = $1`,
             [interaction.channel.id]
         );
 
         const notifyRoleId = rows[0]?.notify_role_id;
+        const isLivePlay = rows[0]?.live_play_channel_id === interaction.channel.id ? 1 : 0;
 
         // Build message for the channel
         let message = '';
@@ -219,9 +220,9 @@ async function handlePostCommand(interaction) {
         // Only INSERT into database AFTER both messages are successfully posted
         await pool.query(
             `INSERT INTO bets 
-            (id, user_id, username, bet_description, sport, risk, odds, payout, result, timestamp, message_id, channel_id, tracker_message_id)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending',$9,$10,$11,$12)`,
-            [id, userId, username, description, sport, risk, odds, payout, timestamp, sent.id, sent.channel.id, trackerMessageId || null]
+            (id, user_id, username, bet_description, sport, risk, odds, payout, result, timestamp, message_id, channel_id, tracker_message_id, is_live_play)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending',$9,$10,$11,$12,$13)`,
+            [id, userId, username, description, sport, risk, odds, payout, timestamp, sent.id, sent.channel.id, trackerMessageId || null, isLivePlay]
         );
 
         return interaction.editReply({
@@ -536,13 +537,14 @@ async function handleScanCommand(interaction) {
     // ── 4. Map units to bets ─────────────────────────────────────
     const mappedBets = mapUnitsToBets(units, parsedBets, eachUnit, unitMap);
 
-    // ── 5. Fetch notify role + tracker channel ───────────────────
+    // ── 5. Fetch notify role + tracker channel (main or live play channel) ──
     const { rows: capperRows } = await pool.query(
-        `SELECT notify_role_id, tracker_channel_id FROM capper_info WHERE channel_id = $1`,
+        `SELECT notify_role_id, tracker_channel_id, live_play_channel_id FROM capper_info WHERE channel_id = $1 OR live_play_channel_id = $1`,
         [interaction.channel.id]
     );
     const notifyRoleId = capperRows[0]?.notify_role_id || null;
     const trackerChannelId = capperRows[0]?.tracker_channel_id || null;
+    const isLivePlay = capperRows[0]?.live_play_channel_id === interaction.channel.id ? 1 : 0;
 
     const timestamp = Date.now();
 
@@ -620,9 +622,9 @@ async function handleScanCommand(interaction) {
 
             await pool.query(
                 `INSERT INTO bets
-                (id, user_id, username, bet_description, sport, risk, odds, payout, result, timestamp, message_id, channel_id, tracker_message_id)
-                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending',$9,$10,$11,$12)`,
-                [betId, userId, username, bet.description, bet.sport, bet.risk, bet.odds, payout, timestamp, sent.id, sent.channel.id, trackerMessageId || null]
+                (id, user_id, username, bet_description, sport, risk, odds, payout, result, timestamp, message_id, channel_id, tracker_message_id, is_live_play)
+                VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending',$9,$10,$11,$12,$13)`,
+                [betId, userId, username, bet.description, bet.sport, bet.risk, bet.odds, payout, timestamp, sent.id, sent.channel.id, trackerMessageId || null, isLivePlay]
             );
 
             if (bet.odds === 0) {
