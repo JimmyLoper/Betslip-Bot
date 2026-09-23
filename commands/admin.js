@@ -35,6 +35,33 @@ module.exports = {
                 )
         )
 
+        // /admin addbetmanual — manual entry, tracker-only (silent), no screenshot/links
+        .addSubcommand(sub =>
+            sub
+                .setName('addbetmanual')
+                .setDescription('Manually add a bet to the capper tracker only (no screenshot/links)')
+                .addStringOption(opt =>
+                    opt.setName('description')
+                        .setDescription('Bet description')
+                        .setRequired(true)
+                )
+                .addNumberOption(opt =>
+                    opt.setName('risk')
+                        .setDescription('Risk (units)')
+                        .setRequired(true)
+                )
+                .addStringOption(opt =>
+                    opt.setName('sport')
+                        .setDescription('Sport (NFL, NBA, etc.)')
+                        .setRequired(true)
+                )
+                .addNumberOption(opt =>
+                    opt.setName('odds')
+                        .setDescription('Odds (e.g., -110, +150)')
+                        .setRequired(true)
+                )
+        )
+
         // /admin resetbet
         // ------------------------------------------------------------ 
         .addSubcommand(sub =>
@@ -61,6 +88,7 @@ module.exports = {
         }
 
         if (sub === 'addbet') return handleAddBet(interaction);
+        if (sub === 'addbetmanual') return handleAddBetManual(interaction);
         if (sub === 'resetbet') return handleResetBet(interaction);
     }
 };
@@ -192,8 +220,55 @@ async function handleAddBet(interaction) {
     }
 }
 
+// ============================================================
+// ADD BET MANUAL HANDLER — direct entry, tracker-only (silent)
+// ============================================================
+async function handleAddBetManual(interaction) {
+    await interaction.deferReply({ ephemeral: true });
 
+    const channelId = interaction.channel.id;
+    const description = interaction.options.getString('description');
+    const risk = interaction.options.getNumber('risk');
+    const sport = interaction.options.getString('sport');
+    const odds = interaction.options.getNumber('odds');
 
+    if (isNaN(risk) || isNaN(odds)) {
+        return interaction.editReply({ content: 'Risk and odds must be valid numbers.' });
+    }
+
+    // Look up capper for this channel
+    const { rows: capperRows } = await pool.query(
+        `SELECT user_id, username, live_play_channel_id FROM capper_info WHERE channel_id = $1 OR live_play_channel_id = $1`,
+        [channelId]
+    );
+
+    if (capperRows.length === 0) {
+        return interaction.editReply({ content: '❌ This channel is not assigned to a capper.' });
+    }
+
+    const { user_id: userId, username } = capperRows[0];
+    const isLivePlay = channelId === capperRows[0].live_play_channel_id ? 1 : 0;
+
+    const payout = calculatePayout(risk, odds);
+    const betId = randomUUID();
+    const timestamp = Date.now();
+
+    try {
+        const trackerMessageId = await postBetToTrackerChannel(interaction.client, userId, betId, description, risk, sport, odds);
+
+        await pool.query(
+            `INSERT INTO bets
+            (id, user_id, username, bet_description, sport, risk, odds, payout, result, timestamp, message_id, channel_id, tracker_message_id, is_live_play)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'pending',$9,$10,$11,$12,$13)`,
+            [betId, userId, username, description, sport, risk, odds, payout, timestamp, null, channelId, trackerMessageId || null, isLivePlay]
+        );
+
+        return interaction.editReply({ content: `✅ Bet silently added to tracker for **${username}**.` });
+    } catch (err) {
+        console.error('[Admin] Error inserting manual bet:', err.message);
+        return interaction.editReply({ content: '❌ Error saving bet to the tracker.' });
+    }
+}
 
 // ============================================================
 // RESET BET HANDLER
