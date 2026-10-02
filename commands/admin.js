@@ -1,7 +1,7 @@
 const { SlashCommandBuilder } = require('discord.js');
 const { randomUUID } = require('crypto');
 const pool = require('../utils/db');
-const { buildSystemPrompt } = require('../utils/sbParsers');
+const { buildCachedSystem } = require('../utils/sbParsers');
 const { getResponseText, parseBetsArray } = require('../utils/parseClaudeBets');
 const { parseDescriptionInput } = require('../utils/parseDescription');
 const { mapUnitsToBets } = require('../utils/mapUnits');
@@ -139,7 +139,7 @@ async function handleAddBet(interaction) {
         const response = await anthropic.messages.create({
             model: 'claude-sonnet-5-5',
             max_tokens: 2500,
-            system: buildSystemPrompt(),
+            system: buildCachedSystem(),
             messages: [
                 {
                     role: 'user',

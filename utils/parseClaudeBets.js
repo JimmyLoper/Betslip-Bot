@@ -5,6 +5,8 @@
  * Doesn't assume content[0] is text (other block types can come first).
  */
 function getResponseText(response) {
+    const u = response.usage;
+    if (u) console.log(`[Claude usage] input=${u.input_tokens} cache_write=${u.cache_creation_input_tokens || 0} cache_read=${u.cache_read_input_tokens || 0} output=${u.output_tokens}`);
     const textBlock = response.content.find(block => block.type === 'text');
     if (!textBlock || !textBlock.text) throw new Error('No text content in Claude response');
     return textBlock.text.trim();

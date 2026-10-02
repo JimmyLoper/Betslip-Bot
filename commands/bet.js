@@ -9,7 +9,7 @@ const {
     StringSelectMenuBuilder,
     MessageFlags,
 } = require('discord.js');
-const { buildSystemPrompt } = require('../utils/sbParsers');
+const { buildCachedSystem } = require('../utils/sbParsers');
 const { getResponseText, parseBetsArray } = require('../utils/parseClaudeBets');
 const { parseDescriptionInput } = require('../utils/parseDescription');
 const { mapUnitsToBets } = require('../utils/mapUnits');
@@ -457,7 +457,7 @@ async function handleScanCommand(interaction) {
         const response = await anthropic.messages.create({
             model: 'claude-sonnet-5-5',
             max_tokens: 2500,
-            system: buildSystemPrompt(),
+            system: buildCachedSystem(),
             messages: [
                 {
                     role: 'user',

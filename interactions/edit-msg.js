@@ -8,7 +8,7 @@ const {
 const db = require('../utils/db');
 const { calculatePayout } = require('../utils/calcPayout');
 const { pendingEdits } = require('../utils/pendingEdits');
-const { buildSystemPrompt } = require('../utils/sbParsers');
+const { buildCachedSystem } = require('../utils/sbParsers');
 const { getResponseText, parseBetsArray } = require('../utils/parseClaudeBets');
 
 module.exports = {
@@ -300,7 +300,7 @@ async function rescanScreenshot(screenshotUrl) {
     const response = await anthropic.messages.create({
         model: 'claude-sonnet-5-5',
         max_tokens: 1000,
-        system: buildSystemPrompt(),
+        system: buildCachedSystem(),
         messages: [{
             role: 'user',
             content: [

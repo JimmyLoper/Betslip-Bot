@@ -313,4 +313,16 @@ Output rules:
 - The response must start with [ and end with ]`;
 }
 
-module.exports = { buildSystemPrompt };
+/**
+ * System prompt as a content block with a 1-hour prompt cache breakpoint.
+ * Pass as the `system` param. Without a hint the text is identical on every call, so all scans share one cache entry.
+ */
+function buildCachedSystem(hint) {
+    return [{
+        type: 'text',
+        text: buildSystemPrompt(hint),
+        cache_control: { type: 'ephemeral', ttl: '1h' }
+    }];
+}
+
+module.exports = { buildSystemPrompt, buildCachedSystem };
