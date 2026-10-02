@@ -9,6 +9,7 @@ const db = require('../utils/db');
 const { calculatePayout } = require('../utils/calcPayout');
 const { pendingEdits } = require('../utils/pendingEdits');
 const { buildSystemPrompt } = require('../utils/sbParsers');
+const { getResponseText, parseBetsArray } = require('../utils/parseClaudeBets');
 
 module.exports = {
     customIds: ['bet_edit_select', 'bet_edit_msg_modal'],
@@ -297,7 +298,7 @@ async function rescanScreenshot(screenshotUrl) {
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
     const response = await anthropic.messages.create({
-        model: 'claude-sonnet-4-6',
+        model: 'claude-sonnet-5-5',
         max_tokens: 1000,
         system: buildSystemPrompt(),
         messages: [{
@@ -309,12 +310,7 @@ async function rescanScreenshot(screenshotUrl) {
         }]
     });
 
-    const rawText = response.content[0].text.trim();
-    const parsedBets = JSON.parse(rawText);
-
-    if (!Array.isArray(parsedBets) || parsedBets.length === 0) {
-        throw new Error('Empty or non-array response from Claude');
-    }
+    const parsedBets = parseBetsArray(getResponseText(response));
 
     // Return the first bet (the user selected one specific bet to edit)
     return parsedBets[0];

@@ -3,6 +3,7 @@ const { randomUUID } = require('crypto');
 const db = require('../utils/db');
 const { parseDescriptionInput } = require('../utils/parseDescription');
 const { buildSystemPrompt } = require('../utils/sbParsers');
+const { getResponseText, parseBetsArray } = require('../utils/parseClaudeBets');
 const { mapUnitsToBets } = require('../utils/mapUnits');
 const { calculatePayout } = require('../utils/calcPayout');
 const { postBetToTrackerChannel } = require('../commands/bet');
@@ -75,7 +76,7 @@ async function processMentionBet(message, client) {
         const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
         const response = await anthropic.messages.create({
-            model: 'claude-sonnet-4-6',
+            model: 'claude-sonnet-5-5',
             max_tokens: 2500,
             system: buildSystemPrompt(),
             messages: [{
@@ -87,16 +88,7 @@ async function processMentionBet(message, client) {
             }]
         });
 
-        const rawText = response.content[0].text.trim();
-        try {
-            parsedBets = JSON.parse(rawText);
-        } catch (parseErr) {
-            // Claude sometimes self-corrects mid-response and prints a second array — take the last (final) one.
-            const matches = rawText.match(/\[[\s\S]*?\]/g);
-            if (!matches || matches.length === 0) throw parseErr;
-            parsedBets = JSON.parse(matches[matches.length - 1]);
-        }
-        if (!Array.isArray(parsedBets) || parsedBets.length === 0) throw new Error('Empty or non-array response');
+        parsedBets = parseBetsArray(getResponseText(response));
     } catch (claudeErr) {
         console.error('Claude parse error (mention flow):', claudeErr);
         await message.author.send('⚠️ Could not parse your betslip. Please check the screenshot and try again.').catch(() => {});

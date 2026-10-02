@@ -3,6 +3,7 @@ const { randomUUID } = require('crypto');
 const db = require('../utils/db');
 const { parseDescriptionInput } = require('../utils/parseDescription');
 const { buildSystemPrompt } = require('../utils/sbParsers');
+const { getResponseText, parseBetsArray } = require('../utils/parseClaudeBets');
 const { mapUnitsToBets } = require('../utils/mapUnits');
 const { calculatePayout } = require('../utils/calcPayout');
 const { postBetToTrackerChannel } = require('../commands/bet');
@@ -90,7 +91,7 @@ async function winibleEmbedScan(message) {
         try {
             const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
             const response = await anthropic.messages.create({
-                model: 'claude-sonnet-4-6',
+                model: 'claude-sonnet-5-5',
                 max_tokens: 2000,
                 system: buildSystemPrompt(),
                 messages: [{
@@ -102,14 +103,7 @@ async function winibleEmbedScan(message) {
                 }]
             });
 
-            const textBlock = response.content.find(block => block.type === 'text');
-            if (!textBlock || !textBlock.text) throw new Error('No text content in Claude response');
-            const rawText = textBlock.text.trim();
-            // Claude sometimes self-corrects mid-response and prints a second array — take the last (final) one.
-            const jsonMatches = rawText.match(/\[[\s\S]*?\]/g);
-            if (!jsonMatches || jsonMatches.length === 0) throw new Error('No JSON array found in Claude response');
-            parsedBets = JSON.parse(jsonMatches[jsonMatches.length - 1]);
-            if (!Array.isArray(parsedBets) || parsedBets.length === 0) throw new Error('Empty or non-array response');
+            parsedBets = parseBetsArray(getResponseText(response));
         } catch (claudeErr) {
             console.error('Claude parse error (Winible embed flow):', claudeErr);
             await dmAdmin(client, '⚠️ Winible Betslip Parse Failed', [

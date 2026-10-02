@@ -2,6 +2,7 @@ const { SlashCommandBuilder } = require('discord.js');
 const { randomUUID } = require('crypto');
 const pool = require('../utils/db');
 const { buildSystemPrompt } = require('../utils/sbParsers');
+const { getResponseText, parseBetsArray } = require('../utils/parseClaudeBets');
 const { parseDescriptionInput } = require('../utils/parseDescription');
 const { mapUnitsToBets } = require('../utils/mapUnits');
 const { calculatePayout } = require('../utils/calcPayout');
@@ -136,7 +137,7 @@ async function handleAddBet(interaction) {
         const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
         const response = await anthropic.messages.create({
-            model: 'claude-sonnet-4-6',
+            model: 'claude-sonnet-5-5',
             max_tokens: 2500,
             system: buildSystemPrompt(),
             messages: [
@@ -153,19 +154,12 @@ async function handleAddBet(interaction) {
             ]
         });
 
-        const rawText = response.content[0].text.trim();
+        const rawText = getResponseText(response);
         try {
-            parsedBets = JSON.parse(rawText);
+            parsedBets = parseBetsArray(rawText);
         } catch (parseErr) {
-            console.error('[Admin] Raw Claude response that failed JSON.parse:', rawText);
-            // Claude sometimes self-corrects mid-response (e.g. "Wait, ...") and prints a second
-            // array — take the LAST match since that's the corrected/final answer.
-            const matches = rawText.match(/\[[\s\S]*?\]/g);
-            if (matches && matches.length > 0) {
-                parsedBets = JSON.parse(matches[matches.length - 1]);
-            } else {
-                throw parseErr;
-            }
+            console.error('[Admin] Raw Claude response that failed to parse:', rawText);
+            throw parseErr;
         }
     } catch (claudeErr) {
         console.error('[Admin] Claude parse error:', claudeErr.message);
