@@ -2,6 +2,35 @@
 // To add a new sportsbook: add a new case in the switch statement inside buildSystemPrompt()
 // with specific instructions for how that sportsbook displays odds, descriptions, and bet layout
 
+const KALSHI_INSTRUCTIONS = `
+SPORTSBOOK: Kalshi (prediction market) — identified by the green "Kalshi" logo top right and a scrolling green ticker strip with a hex code. Two screenshot styles:
+
+Style 1 - Kalshi combo (multi-market):
+- Header reads "X MARKET COMBO" top left
+- Shows COST and MAX PAYOUT in dollars, then the sport and matchup, then each leg listed with a percentage on the right
+- This is ONE single bet object, regardless of how many legs are listed
+- The percentages are leg probabilities only — IGNORE them for odds
+- Description = all legs combined with " + " (e.g. "Tatis 1+ Hits + Machado 1+ Hits")
+- betType = "parlay"
+
+Style 2 - Kalshi single market:
+- Sport label top left, market title below (e.g. "GS Valkyries vs DAL Wings: Points")
+- A "Yes"/"No" position followed by the player/team and line (e.g. "No · Gabby Williams: 15+"), with "X% chance · Cost $Y"
+- MAX PAYOUT shown at the bottom left, "CHANCE NOW" at the bottom right — IGNORE "CHANCE NOW"
+- ONE bet object
+- "Yes" on "Williams: 15+" = "Williams 15+ Pts"; "No" on it = the opposite, "Williams Under 15 Pts"
+- betType = "prop" (or "moneyline"/"spread"/"total" if the market is one of those)
+
+Kalshi odds — there are NO American odds on the slip, so calculate them from the dollar amounts:
+- decimal = MAX PAYOUT / COST
+- If decimal >= 2: odds = round((decimal - 1) * 100), positive (e.g. 52.14 / 25 = 2.0856 -> +109)
+- If decimal < 2: odds = round(-100 / (decimal - 1)), negative (e.g. 40 / 25 = 1.6 -> -167)
+- Do NOT derive odds from the percentage chance; always use MAX PAYOUT / COST
+- If COST or MAX PAYOUT is not visible, set odds to 0
+- Ignore all dollar amounts in the description; the bet size is set elsewhere
+- Ignore the date/time, "OPEN POSITION" text, and the hex code in the ticker strip
+- Sport comes from the sport label (e.g. "Pro Baseball" = "MLB", "WNBA" = "WNBA", "Pro Basketball" = "NBA")`;
+
 /**
  * Builds the Claude system prompt for parsing a betslip screenshot.
  * Contains all parsing rules, classification logic, sportsbook-specific instructions,
@@ -9,9 +38,23 @@
  * @param {string|null} hint - Optional detected sportsbook name (e.g. 'fanduel', 'draftkings')
  * @returns {string} - The full system prompt string
  */
+const SPORTSBOOK_KEYS = ['fanduel', 'draftkings', 'betmgm', 'fanatics', 'betr', 'kalshi'];
+
 function buildSystemPrompt(hint) {
     const normalizedHint = hint ? hint.toLowerCase().replace(/\s/g, '') : null;
 
+    // Callers don't detect the sportsbook, so with no (or an unrecognised) hint include every
+    // sportsbook's rules and let the model pick the one matching the logo/layout in the image.
+    const sbInstructions = SPORTSBOOK_KEYS.includes(normalizedHint) || normalizedHint === 'betrpicks'
+        ? getSbInstructions(normalizedHint)
+        : `The sportsbook was not pre-detected. Identify it from the logo and layout of the screenshot, then apply ONLY the matching section below. If none match, use the "Unknown" rules.
+${SPORTSBOOK_KEYS.map(getSbInstructions).join('\n')}
+${getSbInstructions(null)}`;
+
+    return buildPrompt(sbInstructions);
+}
+
+function getSbInstructions(normalizedHint) {
     let sbInstructions = '';
 
     switch (normalizedHint) {
@@ -199,6 +242,10 @@ SPORTSBOOK: Betr Picks:
 - Ignore all dollar amounts (Perfect amount, Wins up to amount)`;
                         break;
 
+        case 'kalshi':
+            sbInstructions = KALSHI_INSTRUCTIONS;
+            break;
+
         default:
             sbInstructions = `
 SPORTSBOOK: Unknown — apply general rules:
@@ -209,6 +256,10 @@ SPORTSBOOK: Unknown — apply general rules:
             break;
     }
 
+    return sbInstructions;
+}
+
+function buildPrompt(sbInstructions) {
     return `You are a sports betting assistant. Analyze betslip screenshots and extract bets by following these steps exactly.
 
 STEP 1 — CLASSIFY THE SCREENSHOT:
