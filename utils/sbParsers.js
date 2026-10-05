@@ -269,6 +269,9 @@ Look at the screenshot and determine the bet type using ONLY these rules:
 ${sbInstructions}
 
 CRITICAL PARSING RULES:
+- DEFAULT TO SEPARATE BETS. Only return a single combined bet when the screenshot clearly shows a parlay: a "X leg parlay"/"Parlay"/"SGP" header, a combined odds value, or legs joined by a connector line and no individual WAGER/TO WIN per leg. Blocks that each show their own odds (and their own wager input or cash out/settle state) are separate bets, even when the sportsbook section below offers a "set odds to 0" parlay style.
+- Never return odds of 0 for a block that shows its own readable odds. Odds of 0 are only for a clearly-joined unplaced parlay with no combined odds visible.
+- If a parlay or SGP has MORE than 5 legs, do not list the legs. Set description to "<N>-leg <sport> parlay" (e.g. "20-leg NBA parlay", or "12-leg Multisport parlay"). For 5 legs or fewer, list the legs as normal.
 - When a green SGPx badge (DraftKings) or gold SGP+ badge (BetMGM) appears at the top of the screenshot, return exactly ONE bet object. This is an absolute rule with no exceptions. Any sub-SGP blocks, individual legs, or nested SGP headers anywhere below are all part of that single bet. Never return more than one bet object when SGPx or SGP+ is present.
 - Gold "SGP+" badge = ONE single bet object, same rule as green SGPx badge. Any sub-SGP blocks below are legs, not separate bets.
 - Trash can icons on bet blocks = unplaced betslip items, each is an independent bet UNLESS no individual wager inputs are present, in which case treat as parlay legs.

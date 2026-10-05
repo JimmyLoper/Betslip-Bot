@@ -5,7 +5,8 @@ function calculatePayout(risk, odds) {
     const r = parseFloat(risk);
     const o = parseInt(odds, 10);
 
-    if (isNaN(r) || isNaN(o)) {
+    // odds of 0 means "not known yet" (see the Enter Odds prompt) — avoid dividing by zero below
+    if (isNaN(r) || isNaN(o) || o === 0) {
         return 0;
     }
 
